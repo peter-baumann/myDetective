@@ -1,11 +1,11 @@
-#!/usr/bin/env python2
+#!/Library/Frameworks/Python.framework/Versions/2.7/Resources/Python.app/Contents/MacOS/Python
 import sys
-from pdfminer.pdfminer.pdfparser import PDFDocument, PDFParser
-from pdfminer.pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter, process_pdf
-from pdfminer.pdfminer.pdfdevice import PDFDevice, TagExtractor
-from pdfminer.pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
-from pdfminer.pdfminer.cmapdb import CMapDB
-from pdfminer.pdfminer.layout import LAParams
+from pdfminer.pdfparser import PDFDocument, PDFParser
+from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter, process_pdf
+from pdfminer.pdfdevice import PDFDevice, TagExtractor
+from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
+from pdfminer.cmapdb import CMapDB
+from pdfminer.layout import LAParams
 
 # main
 def main(argv):
