@@ -3,6 +3,7 @@ Created on 27.09.2012
 
 @author: Peter
 '''
+import operator
 print "loading libraries...",
 import sys
 import nltk
@@ -10,60 +11,98 @@ import os
 import Data
 import string
 import sqlite3
+import re
 from fwords import fwords
+import math
 from corpusstatistics import corpusstatistics
 from nltk.corpus import LazyCorpusLoader
 from nltk.corpus.reader import *
 from nltk.tag import *
+from nltk.collocations import *
 print "- done"
 
-def main(args):
-    initData()
-    ####Import desired corpus here###############
-    corpus = LazyCorpusLoader('brown', CategorizedTaggedCorpusReader, r'c[a-z]\d\d', cat_file='cats.txt', tag_mapping_function=simplify_brown_tag)
-    #############################################
+def training(init = False):
+    if init: initData()
+    #change this for loading another training corpus:
+    corpus = LazyCorpusLoader('brown', CategorizedTaggedCorpusReader, 
+                              r'c[a-z]\d\d', cat_file='cats.txt', 
+                              tag_mapping_function=simplify_brown_tag)
+    
+    #change this for using a different test method.
+    bm = nltk.collocations.BigramAssocMeasures()
+    test_method = bm.pmi #<<<<<
+    
     corpus_stats = corpusstatistics(corpus)
-    corpus_fword_frequency = corpus_stats.getRelativeFrequency()
+    corpus_fword_frequency = corpus_stats.getRelativeFunctionWordFrequency()
+    #corpus_bigram_frequency = corpus_stats.getBigramFrequency(test_method)
+    
     authors = getAuthors()
     for author in authors:
         for file_ in authors[author]:
-            #load text
-            text = Data.Data(file_[1]).text
-            #tokenize sentences
-            text = nltk.sent_tokenize(text)
-            #tokenize words
-            text = [nltk.word_tokenize(sentence) for sentence in text]
-            
+            text = Data.Data(file_[1]).text.lower()
+            token_count = sum([len([x for x in y if x not in string.punctuation and x[0] != "``" and x[0] != "''"]) for y in text])
+            sentences = nltk.sent_tokenize(text)
+            words = nltk.word_tokenize(text)
+
+            #Function word frequency
             text_fwords = fwords()
-            text_fwords.processSentenceWordArray(text)
+            text_fword_frequency = text_fwords.relativeFrequencyWordArray(words, token_count)
+            print text_fword_frequency
+            #store(text_fwords.getCount(), text_fword_frequency, author, file_[0])
+            
+            #Bigram frequencies
+            bm = nltk.collocations.BigramAssocMeasures()
+            finder = BigramCollocationFinder.from_words(words)
+            finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) #@UndefinedVariable
+            
+            
+            
+            scored = finder.score_ngrams(test_method)
+            
+            #for score in scored:
+            #    if(text_fwords.isFunctionWord(score[0][0]) and text_fwords.isFunctionWord(score[0][1])):
+            #        print score
+            #print "############################################################"
+            
+            #finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) 
+            #print finder.nbest(bm.pmi, 10)
+            
+            #Trigram frequencies
+            #trigram_measures = nltk.collocations.TrigramAssocMeasures()
+            #finder = TrigramCollocationFinder.from_words(words)
+            #finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1)
+            #print finder.nbest(trigram_measures.pmi, 10)
 
-            text_fword_frequency = text_fwords.relativeFrequency(sum([len([x for x in y if x not in string.punctuation and x[0] != "``" and x[0] != "''"]) for y in text]))
-            store(text_fwords.getCount(), text_fword_frequency, author, file_[0])
+
             
-            #nltk.add_logs(logx, logy)
-            
-            #tag part of speech
-            #text = nltk.batch_pos_tag(text)
-            #parser = nltk.ViterbiParser()
-            
-            #print parser.batch_iter_parse(text)
-            #print text
-        
-        #creating sentence structure with POS tagged words
-        
-        #
-        
-        #for sentence in text:
-            #print sentence
-            #print [word[0] for word in sentence if word[1] == "IN"]
-    #try:
-    #except:
-    #    print "error"
-    #    return 0
-    #else:
-    #    return 1
+def testing():
+    pass
+
+def testDocument():
+    pass    
+
+def main(args):
+    training()
+
+#just a helper function for finding the students with the most text data
+def mostWritten():
+    authors = {}
+    files = os.listdir("../CORPUS_TXT/")
+    for file in files:
+        if file[len(file)-3:len(file)] == "txt" and "Freq" not in file:
+            size = os.path.getsize("../CORPUS_TXT/" + file)
+            author = file[0:len(file)-5]
+            if author in authors:
+                authors[author][0] = authors[author][0] + size
+                authors[author][1] = authors[author][1] + 1
+            else:
+                authors.update({author:[size, 1]})
+                
+    authors2 = sorted(authors.items(), key=operator.itemgetter(1), reverse=True)
+    print authors2
+    authors = sorted(authors.items(), key=lambda (k, v): operator.itemgetter(1)(v), reverse=True)
+    print authors
     
-
 def store(abs_frequencies, rel_frequencies, author_name, filename):
     print "generating training data statistics..."
     #storing results in database
@@ -107,7 +146,7 @@ def store(abs_frequencies, rel_frequencies, author_name, filename):
         except sqlite3.IntegrityError: #@UndefinedVariable
             pass
     
-def getAuthors(path = '../documents/'):
+def getAuthors(path = '../training/'):
     """returns a list of authors with corresponding files."""
     authors = {}
     author_listing = os.listdir(path)
@@ -119,7 +158,6 @@ def getAuthors(path = '../documents/'):
             if len(file_listing) > 0:
                 authors.update({author:file_listing})
     return authors
-    
     
 def initData():
     #backup of old database if any, for avoiding unintentional data loss

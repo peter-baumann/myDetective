@@ -5,7 +5,10 @@ Created on 12.10.2012
 '''
 import fwords
 import sqlite3
+import nltk
+from nltk.collocations import *
 from decimal import *
+import math
 
 class corpusstatistics(object):
     '''
@@ -14,31 +17,46 @@ class corpusstatistics(object):
     
     def __init__(self, corpus):
         self.corpus = corpus
+        self.words = [w.lower() for w in self.corpus.words()]
+        self.token_count = 1016752 #TODO - count tokens, and use that value
     
-    def getRelativeFrequency(self, force_update = False):
+    def getRelativeFunctionWordFrequency(self, force_update = False):
         '''
         uses the word of fwords and returns the relative frequency of their appearance to
         the number of tokens in the brown corpus, excluding numbers and punctuation (= 1016752)
         '''
-        
-        #retrieving name of corpus by path
-        cor_path = self.corpus.root.split("/")
-        ar_size = len(self.corpus.root.split("/"))
-        name = cor_path[ar_size - 1] if (ar_size > 0) else "temp"
+        name = self.getCorpusName()
         force_update = True if name == "temp" else force_update;
-        
         #generating and storing new data or using cached values    
         if force_update or not self.isCached(name):
-            words = [w.lower() for w in self.corpus.words()]
             cfword = fwords.fwords()
-            cfword.processWordArray(words)
-            rel_frequencies = cfword.relativeFrequency(1016752) #TODO - count tokens, and use that value
+            cfword.processWordArray(self.words)
+            rel_frequencies = cfword.relativeFrequency(self.token_count) 
             abs_frequencies = cfword.getCount()
             self.store(abs_frequencies, rel_frequencies, name)
             return rel_frequencies
         else:
             rel_frequencies = self.loadRelativeFrequencies(name)
             abs_frequencies = self.loadAbsoluteFrequencies(name)
+    
+    def getBigramFrequency(self, test_method, force_update = False):
+        name = self.getCorpusName()
+        if True:
+            finder = BigramCollocationFinder.from_words(self.words)
+            finder.apply_freq_filter(math.ceil(math.log(self.token_count - 1) /3) - 1) #@UndefinedVariable
+            cfword = fwords.fwords()
+            scored = finder.score_ngrams(test_method)
+            for score in scored:
+                if(cfword.isFunctionWord(score[0][0]) and cfword.isFunctionWord(score[0][1])):
+                    print score
+        print "---------------------------------------"
+    
+    def getCorpusName(self):
+        #retrieving name of corpus by path
+        cor_path = self.corpus.root.split("/")
+        ar_size = len(self.corpus.root.split("/"))
+        return cor_path[ar_size - 1] if (ar_size > 0) else "temp"
+                
     
     def loadAbsoluteFrequencies(self, corpus_name):
         return self.loadFrequencies(corpus_name, True)

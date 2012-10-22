@@ -1,6 +1,7 @@
 '''
 Created on 27.09.2012
-
+Experimental class for PDF parsing. Only reads text from a PDF that belongs to the statistically most frequent group of font size and font
+This ensures that only the main text of a document is considered and not titles or captions of images, etc.
 @author: Peter
 '''
 
@@ -62,6 +63,7 @@ class pdf2text(object):
     def getMostFrequentFontSize(self, text):
         return sorted(self.getFontSizeGroups(text), key=lambda group: group[1], reverse=True)[0]
     
+    #returns cleaned ASCII Text
     def cleanText(self, text):
         next_char = False
         prev_coord = []
@@ -80,4 +82,9 @@ class pdf2text(object):
                         prev_coord = m.group(2).split(",")
                         next_char = True
                     r_text = r_text + m.group(4)
-        return re.sub('\s{2,}', ' ', r_text.strip())
+        r_text = re.sub(r'\s{2,}', ' ', r_text.strip()).replace("\xe2\x80\x99", "'")
+        return ''.join(char for char in r_text if ord(char) < 128)
+    
+    
+    
+    

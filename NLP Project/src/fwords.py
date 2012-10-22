@@ -33,6 +33,13 @@ class fwords(object):
             if word in [w for w in word_list]:
                 word_list[word] += 1
 
+    def isFunctionWord(self, word):
+        '''
+        Takes a word and checks if it is one of the function words. Innner state of object not influenced.
+        '''
+        for word_list in [self.adverbs, self.auxillaries, self.prep_conj, self.determiners]:
+            if word in [w for w in word_list]:
+                return True
 
     def processWordArray(self, text):
         '''
@@ -64,6 +71,9 @@ class fwords(object):
         '''
         return {key : (Decimal(value) / Decimal(size)) for key, value in self.getCount().iteritems()}
 
+    def relativeFrequencyWordArray(self, words, size):
+        self.processWordArray(words)
+        return self.relativeFrequency(size)
 
     #def getVector(self, text_length):
         
