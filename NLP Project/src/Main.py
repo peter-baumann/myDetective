@@ -43,8 +43,8 @@ def training(init = False):
             words = [x for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
 
             
-            #Testing the word lengths, uncomment to run
-            #print author + ", average word length %.2f" % average_word_length(words)
+            #Testing the word/sentence lengths, uncomment to run
+            #print author + ", avg word length %.2f, avg sentence length %.2f" % (average_word_length(words), average_sentence_length(sentences))
             
             #Function word frequency
             fword_frequency = fwordFrequency(words, len(words))
@@ -83,6 +83,13 @@ def average_word_length(words):
             length_total += len(word)
             words_total += 1
     return length_total/float(words_total)
+
+def average_sentence_length(sentences):
+    """ Calculates the average length (in words) of a sentence in array."""
+    length_total = 0
+    for sentence in sentences:
+        length_total += len(sentence.split())
+    return length_total/float(len(sentences))
 
 
 def main(args):
