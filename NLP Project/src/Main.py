@@ -42,6 +42,10 @@ def training(init = False):
             sentences = nltk.sent_tokenize(text)
             words = [x for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
 
+            
+            #Testing the word lengths, uncomment to run
+            #print author + ", average word length %.2f" % average_word_length(words)
+            
             #Function word frequency
             fword_frequency = fwordFrequency(words, len(words))
             #store(text_fwords.getCount(), text_fword_frequency, author, file_[0])
@@ -52,13 +56,34 @@ def training(init = False):
             #Trigram frequencies
             trigram_frequency = TrigramFrequency(words, test_method_tri)
 
-
     
 def testing():
     pass
 
 def testDocument():
-    pass    
+    pass
+    
+def prepare_ngrams(ngrams):
+    """ Prepares the list of n-grams, he or she -> it and so on.
+        Input: two-dimensional list of n-grams"""
+    for index_ngram, ngram in enumerate(ngrams):
+        for index_word, word in enumerate(ngram):
+            if word in ["he", "she"]: ngrams[index_ngram][index_word]="it"
+            if word in ["his", "hers"]: ngrams[index_ngram][index_word]="its"
+    return ngrams
+
+
+def average_word_length(words):
+    """ Calculates the average length of a word in array.
+        Will reject all non-words with regular expression."""
+    words_total = 0
+    length_total = 0
+    for word in words:
+        if re.match("^[A-Za-z-/]+.?$", word):
+            length_total += len(word)
+            words_total += 1
+    return length_total/float(words_total)
+
 
 def main(args):
     training()
