@@ -24,16 +24,15 @@ print "- done"
 def training(init = False):
     if init: initData()
     #change this for loading another training corpus:
-    corpus = LazyCorpusLoader('brown', CategorizedTaggedCorpusReader, 
-                              r'c[a-z]\d\d', cat_file='cats.txt', 
-                              tag_mapping_function=nltk.tag.simplify_brown_tag)
+    #corpus = LazyCorpusLoader('brown', CategorizedTaggedCorpusReader, 
+    #                          r'c[a-z]\d\d', cat_file='cats.txt', 
+    #                          tag_mapping_function=simplify_brown_tag)
     
     #change this for using a different test method.
-    bm = nltk.collocations.BigramAssocMeasures()
-    test_method = bm.pmi #<<<<<
-    
-    corpus_stats = corpusstatistics(corpus)
-    corpus_fword_frequency = corpus_stats.getRelativeFunctionWordFrequency()
+    test_method_bi  = nltk.collocations.BigramAssocMeasures().pmi
+    test_method_tri = nltk.collocations.TrigramAssocMeasures().pmi
+    #corpus_stats = corpusstatistics(corpus)
+    #corpus_fword_frequency = corpus_stats.getRelativeFunctionWordFrequency()
     #corpus_bigram_frequency = corpus_stats.getBigramFrequency(test_method)
     
     authors = getAuthors()
@@ -45,55 +44,61 @@ def training(init = False):
             words = nltk.word_tokenize(text)
 
             #Function word frequency
-            text_fwords = fwords()
-            text_fword_frequency = text_fwords.relativeFrequencyWordArray(words, token_count)
-            print text_fword_frequency
+            fword_frequency = fwordFrequency(words, token_count)
             #store(text_fwords.getCount(), text_fword_frequency, author, file_[0])
             
             #Bigram frequencies
-            bm = nltk.collocations.BigramAssocMeasures()
-            finder = BigramCollocationFinder.from_words(words)
-            finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) #@UndefinedVariable
-            
-            
-            
-            scored = finder.score_ngrams(test_method)
-            
-            #for score in scored:
-            #    if(text_fwords.isFunctionWord(score[0][0]) and text_fwords.isFunctionWord(score[0][1])):
-            #        print score
-            #print "############################################################"
-            
-            #finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) 
-            #print finder.nbest(bm.pmi, 10)
+            bigram_frequency = BigramFrequency(words, token_count, test_method_bi)
             
             #Trigram frequencies
-            #trigram_measures = nltk.collocations.TrigramAssocMeasures()
-            #finder = TrigramCollocationFinder.from_words(words)
-            #finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1)
-            #print finder.nbest(trigram_measures.pmi, 10)
+            trigram_frequency = TrigramFrequency(words, token_count, test_method_tri)
 
 
-            
+
+    
 def testing():
     pass
 
 def testDocument():
     pass
     
-
 def prepare_ngrams(ngrams):
     """ Prepares the list of n-grams, he or she -> it and so on.
         Input: two-dimensional list of n-grams"""
     for index_ngram, ngram in enumerate(ngrams):
         for index_word, word in enumerate(ngram):
             if word in ["he", "she"]: ngrams[index_ngram][index_word]="it"
-            elif word in ["his", "hers"]: ngrams[index_ngram][index_word]="its"
+            if word in ["his", "hers"]: ngrams[index_ngram][index_word]="its"
     return ngrams
 
 
 def main(args):
     training()
+    
+def fwordFrequency(words, token_count):
+    text_fwords = fwords()
+    return text_fwords.relativeFrequencyWordArray(words, token_count)
+
+def BigramFrequency(words, token_count, test_method):
+    return_array = []
+    finder = BigramCollocationFinder.from_words(words)
+    finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) #@UndefinedVariable
+    scored = finder.score_ngrams(test_method)
+    for score in scored:
+        if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1])):
+            return_array.append(score)
+    return return_array
+    
+def TrigramFrequency(words, token_count, test_method):    
+    return_array = []
+    finder = TrigramCollocationFinder.from_words(words)
+    finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) #@UndefinedVariable
+    scored = finder.score_ngrams(test_method)
+    for score in scored:
+        if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1]) and fwords.isFunctionWord(score[0][2])):
+            return_array.append(score)
+    return return_array
+    
 
 #just a helper function for finding the students with the most text data
 def mostWritten():
@@ -113,7 +118,7 @@ def mostWritten():
     print authors2
     authors = sorted(authors.items(), key=lambda (k, v): operator.itemgetter(1)(v), reverse=True)
     print authors
-    
+
 def store(abs_frequencies, rel_frequencies, author_name, filename):
     print "generating training data statistics..."
     #storing results in database

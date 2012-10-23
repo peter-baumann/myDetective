@@ -33,11 +33,13 @@ class fwords(object):
             if word in [w for w in word_list]:
                 word_list[word] += 1
 
-    def isFunctionWord(self, word):
+    @staticmethod
+    def isFunctionWord(word):
         '''
         Takes a word and checks if it is one of the function words. Innner state of object not influenced.
         '''
-        for word_list in [self.adverbs, self.auxillaries, self.prep_conj, self.determiners]:
+        fwobj = fwords()
+        for word_list in [fwobj.adverbs, fwobj.auxillaries, fwobj.prep_conj, fwobj.determiners]:
             if word in [w for w in word_list]:
                 return True
 
