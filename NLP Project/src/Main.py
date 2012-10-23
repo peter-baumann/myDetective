@@ -26,7 +26,7 @@ def training(init = False):
     #change this for loading another training corpus:
     corpus = LazyCorpusLoader('brown', CategorizedTaggedCorpusReader, 
                               r'c[a-z]\d\d', cat_file='cats.txt', 
-                              tag_mapping_function=simplify_brown_tag)
+                              tag_mapping_function=nltk.tag.simplify_brown_tag)
     
     #change this for using a different test method.
     bm = nltk.collocations.BigramAssocMeasures()
