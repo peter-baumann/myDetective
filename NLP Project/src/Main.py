@@ -79,7 +79,18 @@ def testing():
     pass
 
 def testDocument():
-    pass    
+    pass
+    
+
+def prepare_ngrams(ngrams):
+    """ Prepares the list of n-grams, he or she -> it and so on.
+        Input: two-dimensional list of n-grams"""
+    for index_ngram, ngram in enumerate(ngrams):
+        for index_word, word in enumerate(ngram):
+            if word in ["he", "she"]: ngrams[index_ngram][index_word]="it"
+            elif word in ["his", "hers"]: ngrams[index_ngram][index_word]="its"
+    return ngrams
+
 
 def main(args):
     training()
