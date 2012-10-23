@@ -39,20 +39,18 @@ def training(init = False):
     for author in authors:
         for file_ in authors[author]:
             text = Data.Data(file_[1]).text.lower()
-            token_count = sum([len([x for x in y if x not in string.punctuation and x[0] != "``" and x[0] != "''"]) for y in text])
             sentences = nltk.sent_tokenize(text)
-            words = nltk.word_tokenize(text)
+            words = [x for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
 
             #Function word frequency
-            fword_frequency = fwordFrequency(words, token_count)
+            fword_frequency = fwordFrequency(words, len(words))
             #store(text_fwords.getCount(), text_fword_frequency, author, file_[0])
             
             #Bigram frequencies
-            bigram_frequency = BigramFrequency(words, token_count, test_method_bi)
+            bigram_frequency = BigramFrequency(words, test_method_bi)
             
             #Trigram frequencies
-            trigram_frequency = TrigramFrequency(words, token_count, test_method_tri)
-
+            trigram_frequency = TrigramFrequency(words, test_method_tri)
 
 
     
@@ -69,20 +67,20 @@ def fwordFrequency(words, token_count):
     text_fwords = fwords()
     return text_fwords.relativeFrequencyWordArray(words, token_count)
 
-def BigramFrequency(words, token_count, test_method):
+def BigramFrequency(words, test_method):
     return_array = []
     finder = BigramCollocationFinder.from_words(words)
-    finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) #@UndefinedVariable
+    finder.apply_freq_filter(math.ceil(math.log(len(words) - 1) /3) - 1) #@UndefinedVariable
     scored = finder.score_ngrams(test_method)
     for score in scored:
         if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1])):
             return_array.append(score)
     return return_array
     
-def TrigramFrequency(words, token_count, test_method):    
+def TrigramFrequency(words, test_method):    
     return_array = []
     finder = TrigramCollocationFinder.from_words(words)
-    finder.apply_freq_filter(math.ceil(math.log(token_count - 1) /3) - 1) #@UndefinedVariable
+    finder.apply_freq_filter(math.ceil(math.log(len(words) - 1) /3) - 1) #@UndefinedVariable
     scored = finder.score_ngrams(test_method)
     for score in scored:
         if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1]) and fwords.isFunctionWord(score[0][2])):

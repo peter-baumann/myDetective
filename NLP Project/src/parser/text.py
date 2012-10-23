@@ -15,7 +15,7 @@ class textp(object):
             raise Exception("Text file has to end in .txt and has to have a name!")
         self.text = self.cleanText(open(src, 'r').read())
         
-        
+    #TODO: strip non relevant chapters    
     def cleanText(self, text):
         return text
     
