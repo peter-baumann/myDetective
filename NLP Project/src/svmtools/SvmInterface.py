@@ -11,31 +11,52 @@ from svmutil import *
 
 # Trains an svm model using C-svm and the RBF kernel using optimal parameters
 # @params
-#   labels - a list containing the class labels. Each index corresponds to an instance in values
+#   labels - a list containing the class labels. Each index corresponds to an instance in values.
+#            Can also be a dictionary  with nothing for values
 #   values - a 2d list containing the instances. Each row represents 1 instance. Each col represents 1 feature
-def svmtrain(labels, values):
-    # Retrieve optimal c and g
-    optParam = Param()
-    optParam.c, optParam.g = getOptCG(labels, values)    
+def svmtrain(labels, values=None):
+    # If Dictionary
+    if isinstance(labels, dict):        
+        values = [j for i in labels.itervalues() for j in i.itervalues()]
+        labels = [i + 1 for i in range(len(labels.values())) for j in range(len(labels[labels.keys()[i]]))]
+
+    if values != None:
+        # Retrieve optimal c and g
+        optParam = Param()
+        optParam.c, optParam.g = getOptCG(labels, values)    
     
-    # Train model with optimal c and g
-    prob = svm_problem(labels, values)
-    m = svm_train(prob, optParam.libsvm)
+        # Train model with optimal c and g
+        prob = svm_problem(labels, values)
+        m = svm_train(prob, optParam.libsvm)
     
-    # Return model
-    return m
+        # Return model
+        return m
+    else:
+        raise TypeError("Values not provided for the arguments")
 
 # Using a provided model, generates the predicted labels for each instance provided
 # @params
 #   values - a 2d list containing the instances. Same as values in svmtrain.
+#            Can also be a dictionary. In that case, only the values are extracted.
 #   model - a model trained using svmtrain()
 def svmtest(values, model):    
-    # Test model with provided data
-    labels = [0 for i in range(len(values))]
-    pred, acc, p_vals = svm_predict(labels, values, model)
+    if isinstance(values, list) or isinstance(values, dict):
+        # If dictionary
+        if isinstance(values, dict):        
+            values = [j for i in values.itervalues() for j in i.itervalues()]
+        
+        # Fix if single example (first element is not a list)
+        if isinstance(values[0], list) == False:
+            values = [values]
     
-    # Return prediction
-    return pred
+        # Test model with provided data
+        labels = [0 for i in range(len(values))]
+        pred, acc, p_vals = svm_predict(labels, values, model)
+    
+        # Return prediction
+        return pred
+    else:
+        raise TypeError("Inappropriate argument provided for values")
 
 # Searches a grid for the optimal c and g values for a given dataset
 def getOptCG(labels, values):
