@@ -44,7 +44,7 @@ def training(init = False):
 
             
             #Testing the word/sentence lengths, uncomment to run
-            #print author + ", avg word length %.2f, avg sentence length %.2f" % (average_word_length(words), average_sentence_length(sentences))
+            print author + ", avg word length %.2f, avg sentence length %.2f" % (average_word_length(words), average_sentence_length(sentences))
             
             #Function word frequency
             fword_frequency = fwordFrequency(words, len(words))
