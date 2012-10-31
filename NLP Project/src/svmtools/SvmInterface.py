@@ -45,8 +45,8 @@ def svmtest(values, model):
         if isinstance(values, dict):        
             values = [j for i in values.itervalues() for j in i.itervalues()]
         
-        # Fix if single example (first element is not a list)
-        if isinstance(values[0], list) == False:
+        # Fix if single example (first element is a float, long, int)
+        if isinstance(values[0], (float, long, int)):
             values = [values]
     
         # Test model with provided data
