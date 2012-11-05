@@ -3,27 +3,121 @@
 # Using x64 libsvm.dll from http://www.shenzousite.com/LibSVM.htm
 # Last update: 31 Oct 2012
 
-import sys
-from Param import Param     # Import class Param from file Param.py
+import sys, random
+from Param import *     # Import class Param from file Param.py
 from svmutil import *
 
 # Methods
+
+# Given a set of data, divide the data into k partitions and train a model from each partition.
+# The model with the best accuracy is returned together with the avg_accuracy across the entire
+# spectrum of data
+# @params
+#   labels -    A list containing the class labels. Each index corresponds to an instance in values.
+#               Can also be a dictionary with no values provided or an svm_problem object.
+#   values -    A 2d list containing the instances. Each row represents 1 instance. Each col represents
+#               1 feature.
+def xTrain(labels, values=None):
+    k = 10  # 10 fold cross-validation
+    # Split data into k partitions
+    partitions = split(labels, values, 10)
+    best_model = None
+    best_acc = -1
+    avg_acc = 0
+    count = 0
+    
+
+    if isinstance(labels, dict):
+        values = [j for i in labels.itervalues() for j in i.itervalues()]
+        labels = [i + 1 for i in range(len(labels.values())) for j in range(len(labels[labels.keys()[i]]))]
+
+    if values != None:
+        optParam = Param()
+        print "Searching for optimal parameters..."
+        optParam.c, optParam.g = getOptCG(labels, values)
+        print "c: " + str(optParam.c) + " g: " + str(optParam.g)
+        print " "
+
+        # For each partition, train a model and check the accuracy of the partition's test data against
+        # the model. The highest accuracy model will be the model returned. The accuracy returned is the
+        # average accuracy of all the partitions
+        for i in partitions.iter:
+            print "Training iteration " + str(count + 1) + ".."
+            # Train the model using the partition training data
+            model = svmtrain(i.train.labels, i.train.values, optParam.c, optParam.g)
+            # Get a list of predictions for the testing data
+            pred = svmtest(i.test.values, model)
+            # Find the accuracy of the test data predicted by the model
+            acc, x1, x2 = evaluations(i.test.labels, pred)
+
+            # Store the model with the best accuracy
+            if acc > best_acc:
+                best_acc = acc
+                best_model = model
+
+            print "Iteration " + str(count + 1) + " accuracy: " + str(acc)
+            avg_acc += acc
+            count += 1
+
+        # Get the avg accuracy
+        avg_acc /= count
+
+        print " "
+        print "xTrain completed."
+        return model, avg_acc
+        
+def split(labels, values=None, k=5):
+
+    if isinstance(labels, dict):
+        values = [j for i in labels.itervalues() for j in i.itervalues()]
+        labels = [i + 1 for i in range(len(labels.values())) for j in range(len(labels[labels.keys()[i]]))]
+
+    if values != None:
+        randStart = random.randint(0, len(labels))
+        step = len(labels) / k  # Each patition size
+        splitPts = range(randStart, len(labels) + randStart - step, step)
+        partitions = []
+        for i in range(len(splitPts)):
+            stPt = splitPts[i] % len(labels)
+            endPt = splitPts[(i+1) % len(splitPts)] - 1 # To handle circular problems
+            midPt1 = (stPt + endPt) / 2
+            midPt2 = midPt1 + 1
+
+            if endPt < stPt:
+                midPt1 = len(labels) - 1
+                midPt2 = 0
+
+            partitionLabels = labels[stPt:midPt1 + 1]
+            partitionLabels.extend(labels[midPt2:endPt + 1])
+            partitionValues = values[stPt:midPt1 + 1]
+            partitionValues.extend(values[midPt2:endPt + 1])
+            partition = DataSet(partitionLabels, partitionValues)
+            partitions.append(partition)
+
+        distPartitions = Partitions(partitions)
+
+        return distPartitions
 
 # Trains an svm model using C-svm and the RBF kernel using optimal parameters
 # @params
 #   labels - a list containing the class labels. Each index corresponds to an instance in values.
 #            Can also be a dictionary  with nothing for values
 #   values - a 2d list containing the instances. Each row represents 1 instance. Each col represents 1 feature
-def svmtrain(labels, values=None):
+def svmtrain(labels, values=None, c=None, g=None):
+
     # If Dictionary
     if isinstance(labels, dict):        
         values = [j for i in labels.itervalues() for j in i.itervalues()]
         labels = [i + 1 for i in range(len(labels.values())) for j in range(len(labels[labels.keys()[i]]))]
 
     if values != None:
-        # Retrieve optimal c and g
+        
         optParam = Param()
-        optParam.c, optParam.g = getOptCG(labels, values)    
+        optParam.c = c
+        optParam.g = g
+        if c == None or g == None:
+            # Retrieve optimal c and g
+            optParam.c, optParam.g = getOptCG(labels, values)    
     
         # Train model with optimal c and g
         prob = svm_problem(labels, values)
@@ -57,6 +151,9 @@ def svmtest(values, model):
         return pred
     else:
         raise TypeError("Inappropriate argument provided for values")
+
+#def partitions(labels, values=None):
+    # Check data type
 
 # Searches a grid for the optimal c and g values for a given dataset
 def getOptCG(labels, values):
