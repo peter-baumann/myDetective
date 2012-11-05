@@ -366,8 +366,8 @@ def main():
                 print("[{0}] {1} {2} {3} (best c={4}, g={5}, rate={6})".format \
 		    (worker,c1,g1,rate, best_c, best_g, best_rate))
             db.append((c,g,done_jobs[(c,g)]))
-        redraw(db,[best_c1, best_g1, best_rate])
-        redraw(db,[best_c1, best_g1, best_rate],True)
+        #redraw(db,[best_c1, best_g1, best_rate])
+        #redraw(db,[best_c1, best_g1, best_rate],True)
 
     job_queue.put((WorkerStopToken,None))
     print("{0} {1} {2}".format(best_c, best_g, best_rate))

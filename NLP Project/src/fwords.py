@@ -22,7 +22,7 @@ class fwords(object):
         words.update(self.adverbs)
         words.update(self.auxillaries)
         words.update(self.prep_conj)
-        words.update(self.determiners)
+        #words.update(self.determiners)
         return words
     
     def processWord(self, word):

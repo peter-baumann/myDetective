@@ -15,10 +15,10 @@ if not is_win32:
 	svmscale_exe = "../svm-scale"
 	svmtrain_exe = "../svm-train"
 	svmpredict_exe = "../svm-predict"
-	grid_py = "./grid.py"
+	grid_py = "./svmtools/grid.py"
 	gnuplot_exe = "/usr/bin/gnuplot"
 else:
-        # example for windows
+	# example for windows
 	svmscale_exe = r"..\windows\svm-scale.exe"
 	svmtrain_exe = r"..\windows\svm-train.exe"
 	svmpredict_exe = r"..\windows\svm-predict.exe"
@@ -45,7 +45,7 @@ if len(sys.argv) > 2:
 	scaled_test_file = file_name + ".scale"
 	predict_test_file = file_name + ".predict"
 
-cmd = '{0} -s "{1}" "{2}" > "{3}"'.format(svmscale_exe, range_file, train_pathname, scaled_file)
+cmd = '{0} -l 0 -s "{1}" "{2}" > "{3}"'.format(svmscale_exe, range_file, train_pathname, scaled_file)
 print('Scaling training data...')
 Popen(cmd, shell = True, stdout = PIPE).communicate()	
 
