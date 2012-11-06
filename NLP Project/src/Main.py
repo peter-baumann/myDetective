@@ -13,6 +13,7 @@ from nltk.corpus.reader import *
 from nltk.tag import *
 from nltk.collocations import *
 from subprocess import *
+from svmtools.SvmInterface import *
 print "- done"
 
 f = False
@@ -23,6 +24,15 @@ settings = {'FunctionWordFrequency' : f,
             'AverageWordLength' : t, 
             'AverageSentenceLength' : f, 
             'LexicalDiversity' : f}
+
+# Constants 
+class Mode:
+    FunctionWordFrequency = 1
+    BigramFrequency = 2
+    TrigramFrequency = 4
+    AverageWordLength = 8
+    AverageSentenceLength = 16
+    LexicalDiversity = 32
 
 #don't change this
 bigramIndices = []
@@ -173,13 +183,61 @@ def processAuthorFolder(input_folder, output_file):
             wfile.write(listToSVMVector(author_id, getAttributeVector(file_[1])))
     wfile.close()
     
+def extractVectors(input_folder):    
+    authors = getAuthors(input_folder)
+    author_id = 0
+    labels = []
+    values = []
+    author_list = []
+    for author in authors:
+        author_id += 1
+        author_list.append(author)
+        for file_ in authors[author]:
+            labels.append(author_id)
+            values.append(getAttributeVector(file_[1]))
+
+    return labels, values, author_list
+
+def setMode(mode):
+    cset(f, f, f, f, f, f)
+    atLeast1Mode = False
+    # test type
+    if mode & Mode.FunctionWordFrequency == Mode.FunctionWordFrequency:
+        print "mode 1"
+        cset(t,f,f,f,f,f)
+        atLeast1Mode = True
+    if mode & Mode.BigramFrequency == Mode.BigramFrequency:
+        print "mode 2"
+        cset(f,f,f,t,f,f)
+        atLeast1Mode = True
+    if mode & Mode.TrigramFrequency == Mode.TrigramFrequency:
+        print "mode 3"
+        cset(f,f,f,t,f,f)
+        atLeast1Mode = True
+    if mode & Mode.AverageWordLength == Mode.AverageWordLength:
+        print "mode 4"
+        cset(f,f,f,t,f,f)
+        atLeast1Mode = True
+    if mode & Mode.AverageSentenceLength == Mode.AverageSentenceLength:
+        print "mode 5"
+        cset(f,f,f,f,t,f)
+        atLeast1Mode = True
+    if mode & Mode.LexicalDiversity == Mode.LexicalDiversity:
+        print "mode 6"
+        cset(f,f,f,f,f,t)
+        atLeast1Mode = True
+    if atLeast1Mode == False:
+        print "mode err"
+        return    # invalid mode
+    
 def getAuthors(path = '../training/'):
     """returns a list of authors with corresponding files."""
     authors = collections.OrderedDict()
     author_listing = os.listdir(path)
     for author in author_listing:
         if os.path.isdir(path + author):
-            author_path = os.path.join(path, author) + "/"
+            author_path = os.path.join(path, author)
+            author_path += "/"
             file_listing = os.listdir(author_path)
             file_listing = [[file_, author_path + file_] for file_ in file_listing]
             if len(file_listing) > 0:
@@ -432,8 +490,8 @@ def initData():
     conn.commit()
     cursor.close()
 
-if __name__ == '__main__':
-    main(sys.exit(main(sys.argv)))    
+#if __name__ == '__main__':
+    #main(sys.exit(main(sys.argv)))    
     
 def corpusStuff(init = False):
     #change this for loading another training corpus:
@@ -448,4 +506,10 @@ def corpusStuff(init = False):
     corpus_fword_frequency = corpus_stats.getRelativeFunctionWordFrequency()
     corpus_bigram_frequency = corpus_stats.getBigramFrequency(test_method_bi)
     
-main()
+#main()
+
+def getBestModel(authorPath):
+    modes = [Mode.AverageSentenceLength, Mode.AverageWordLength, Mode.BigramFrequency, Mode.FunctionWordFrequency, Mode.LexicalDiversity, Mode.TrigramFrequency]
+
+if __name__ == '__main__':
+    main()

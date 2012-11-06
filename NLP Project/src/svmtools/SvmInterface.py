@@ -3,7 +3,7 @@
 # Using x64 libsvm.dll from http://www.shenzousite.com/LibSVM.htm
 # Last update: 31 Oct 2012
 
-import sys, random
+import sys, random, math
 from Param import *     # Import class Param from file Param.py
 from svmutil import *
 
@@ -17,10 +17,9 @@ from svmutil import *
 #               Can also be a dictionary with no values provided or an svm_problem object.
 #   values -    A 2d list containing the instances. Each row represents 1 instance. Each col represents
 #               1 feature.
-def xTrain(labels, values=None):
-    k = 10  # 10 fold cross-validation
+def xTrain(labels, values=None, k=10, rand=True):
     # Split data into k partitions
-    partitions = split(labels, values, 10)
+    partitions = split(labels, values, k, rand)
     best_model = None
     best_acc = -1
     avg_acc = 0
@@ -66,16 +65,24 @@ def xTrain(labels, values=None):
         print "xTrain completed."
         return model, avg_acc
         
-def split(labels, values=None, k=5):
+def split(labels, values=None, k=5, rand=True):
 
     if isinstance(labels, dict):
         values = [j for i in labels.itervalues() for j in i.itervalues()]
         labels = [i + 1 for i in range(len(labels.values())) for j in range(len(labels[labels.keys()[i]]))]
 
     if values != None:
-        randStart = random.randint(0, len(labels))
+        # Normalize data
+        values, meanVect, stdVect = normalise(values)
+
+        print "Patitioning into " + str(k) + " parts."
+
+        if rand:
+            randStart = random.randint(0, len(labels))
+        else:
+            randStart = 0
         step = len(labels) / k  # Each patition size
-        splitPts = range(randStart, len(labels) + randStart - step, step)
+        splitPts = range(randStart, len(labels) + randStart, step)
         partitions = []
         for i in range(len(splitPts)):
             stPt = splitPts[i] % len(labels)
@@ -94,9 +101,69 @@ def split(labels, values=None, k=5):
             partition = DataSet(partitionLabels, partitionValues)
             partitions.append(partition)
 
+        print str(len(partitions)) + " partitions created."
         distPartitions = Partitions(partitions)
 
         return distPartitions
+
+def normalise(values, val=None, meanVect=None, stdVect=None):
+    if values == "reverse":
+        result = []
+        result.extend(val)
+        for i in range(len(result)):
+            for j in range(len(result[i])):
+                result[i][j] = result[i][j] * stdVect[j] + meanVect[j]
+
+        return result
+    else:
+        if isinstance(values, list):
+            meanVect = calMean(values)
+            stdVect = calStd(values, meanVect)
+
+        if values == "apply":
+            result = []
+            result.extend(val)
+        else:
+            result = []
+            result.extend(values)
+
+        for i in range(len(result)):
+            for j in range(len(result[i])):
+                result[i][j] = (float(result[i][j]) - meanVect[j])
+                if stdVect[j] != 0:
+                    result[i][j] / stdVect[j]
+
+        if values == "apply":
+            return result
+        else:
+            return result, meanVect, stdVect
+
+def calMean(values):
+    result = [0 for i in range(len(values[0]))]
+    for i in range(len(values)):
+        for j in range(len(values[i])):
+            result[j] += values[i][j]
+
+    #print "Result: " + str(result)
+    for i in range(len(result)):
+        result[i] = float(result[i]) / float(len(values))
+
+    return result
+
+def calStd(values, meanVect=None):
+    if meanVect == None:
+        meanVect = calMean(values)
+        
+    result = [0 for i in range(len(values[0]))]
+    for i in range(len(values)):
+        for j in range(len(values[i])):
+            result[j] += (float(values[i][j]) - meanVect[j]) ** 2
+
+    for i in range(len(result)):
+        result[i] = float(result[i]) / float(len(values) - 1)
+        result[i] = math.sqrt(result[i])
+
+    return result
 
 # Trains an svm model using C-svm and the RBF kernel using optimal parameters
 # @params
