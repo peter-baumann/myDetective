@@ -7,12 +7,15 @@ import operator
 print "loading libraries...",
 import sys, nltk, os, Data, string, sqlite3, re, math, collections
 from fwords import fwords
+from database import database
+from decimal import *
 from corpusstatistics import corpusstatistics
 from nltk.corpus import LazyCorpusLoader
 from nltk.corpus.reader import *
 from nltk.tag import *
 from nltk.collocations import *
 from subprocess import *
+from nltk.corpus import wordnet as wn
 print "- done"
 
 f = False
@@ -38,9 +41,51 @@ tri_meassures = {"Raw frequency":x.raw_freq, "Chi-squared":x.chi_sq, "Jaccard In
 training_mode = True
 ##################
 
+def walkThrough():
+    authors = getAuthors()
+    pattern = re.compile('[\.\'\/]+')
+    for author in authors:
+        print "-----------------------------new author..."
+        for file_ in authors[author]:
+            print "-------------------------new file..."
+            text = Data.Data(file_[1]).text.lower()
+            words = [pattern.sub('', x) for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
+            for w in set(words):
+                testit(w)
+import urllib2
+opener = urllib2.build_opener()
+opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+word_list = []
+def testit(word):
+    global word_list
+    if wn.morphy(word) == None: #@UndefinedVariable
+        if len(wn.synsets(word)) == 0: #@UndefinedVariable
+            if not fwords.isFunctionWord(word):
+                if word not in word_list:
+                    page = opener.open("http://en.wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + word + "&srprop=timestamp").read()
+                    r1 = re.compile(r"totalhits=\"(.*?)\"")
+                    r2 = re.compile(r"suggestion=\"(.*?)\"")
+                    m = [r1.search(page), r2.search(page)]
+                    if m[0]:
+                        if m[1]:
+                            print word + ": " + m[0].group(1) + ", suggested: " + m[1].group(1)
+                        else:
+                            print word + ": " + m[0].group(1)
+                             
+#                    source = ""
+#                    for z in page:
+#                        source += z
+#                    page.close()                  
+#                    if "missing" not in source:
+#                        print source
+#                    else:
+#                        print "not in wiki: " + word
+#                        word_list.append(word)
+
 def main(args):
     global training_mode, test_method_bi, test_method_tri
-    batchTest()
+    walkThrough()
+    #batchTest()
     #mostWritten()
 #    train = "training.lsvm"
 #    test = "testing.lsvm"
@@ -352,6 +397,22 @@ def TrigramFrequencyToUnifiedVector(bg_freq):
                 pass
     return [b[1] for b in trigram_vector]  
 
+def punctuation(text):
+    '''returns a vector with punctuation statistics from a text'''
+    size = len(text)
+    return [Decimal(text.count(".")) / Decimal(size), 
+            Decimal(text.count(",")) / Decimal(size), 
+            Decimal(text.count("?")) / Decimal(size), 
+            Decimal(text.count("!")) / Decimal(size), 
+            Decimal(text.count(":")) / Decimal(size), 
+            Decimal(text.count(";")) / Decimal(size),
+            Decimal(text.count("-")) / Decimal(size)]
+    pass
+
+def spelling(text):
+    '''returns a vector with statistics about spelling mistakes in a text. Further idea: distance from common word, more as 2 appearances'''
+    pass
+
 #just a helper function for finding the students with the most text data
 def mostWritten():
     authors = {}
@@ -370,67 +431,6 @@ def mostWritten():
     print authors2
     authors = sorted(authors.items(), key=lambda (k, v): operator.itemgetter(1)(v), reverse=True)
     print authors
-
-def store(abs_frequencies, rel_frequencies, author_name, filename):
-    print "generating training data statistics..."
-    #storing results in database
-    con = sqlite3.connect("../cache.db") #@UndefinedVariable
-    #Add corpus if not already in db
-    try:
-        with con:
-            con.execute("INSERT INTO authors(name) VALUES (?)", [author_name])
-    except sqlite3.IntegrityError: #@UndefinedVariable
-        pass
-    #get author id
-    author_id = 0
-    for row in con.execute("SELECT rowid FROM authors WHERE name=?", [author_name]):
-        author_id = row[0]
-    #Add function words if not already in db
-    for key in rel_frequencies.iterkeys():
-        try:
-            with con:
-                con.execute("INSERT INTO fwords(name) VALUES (?)", [key])
-        except sqlite3.IntegrityError: #@UndefinedVariable
-            pass
-    #retrieve ids
-    ids = {}        
-    for key in rel_frequencies.iterkeys():
-        for row in con.execute("SELECT rowid FROM fwords WHERE name=?", [key]):
-            ids.update({key:row[0]})
-    #Add training text if not already in db
-    try:
-        with con:
-            con.execute("INSERT INTO training(filename, author_id) VALUES (?,?)", [filename, author_id])
-    except sqlite3.IntegrityError: #@UndefinedVariable
-        pass
-    #get training id
-    for row in con.execute("SELECT rowid FROM training WHERE filename=? AND author_id=?", [filename, author_id]):
-        training_id = row[0]      
-    #store values in db
-    for key in rel_frequencies.iterkeys():
-        try:
-            with con:
-                con.execute("INSERT INTO training_fwords(training_id, fword_id, count, percentage) VALUES (?, ?, ?, ?)", (training_id, ids[key], int(abs_frequencies[key]), str(rel_frequencies[key])))
-        except sqlite3.IntegrityError: #@UndefinedVariable
-            pass
-    
-def initData():
-    #backup of old database if any, for avoiding unintentional data loss
-    if os.path.isfile("../cache.db"):
-        from time import time
-        os.rename("../cache.db", "../cache_bkp" + str(time()) + ".db")
-    #creating database
-    conn = sqlite3.connect("../cache.db") #@UndefinedVariable
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE corpora (name varchar unique , count integer)")
-    cursor.execute("CREATE TABLE fwords (name varchar unique)")
-    cursor.execute("CREATE TABLE corpora_fwords (corpus_id integer, fword_id integer, count integer, percentage text)")
-    cursor.execute("CREATE TABLE authors (name varchar unique)")
-    #TODO : execute once for table creation, store values in db
-    cursor.execute("CREATE TABLE training (filename varchar unique, author_id integer, count integer)")
-    cursor.execute("CREATE TABLE training_fwords (training_id integer, fword_id integer, count integer, percentage text)")
-    conn.commit()
-    cursor.close()
 
 if __name__ == '__main__':
     main(sys.exit(main(sys.argv)))    
