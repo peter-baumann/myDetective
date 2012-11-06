@@ -5,7 +5,7 @@ Created on 27.09.2012
 '''
 import operator
 print "loading libraries...",
-import sys, nltk, os, Data, string, sqlite3, re, math, collections
+import sys, nltk, os, Data, string, re, math, collections, urllib2
 from fwords import fwords
 from database import database
 from decimal import *
@@ -39,6 +39,10 @@ bi_meassures = {"Raw frequency":x.raw_freq, "Chi-squared":x.chi_sq, "Dice's coef
 x = nltk.collocations.TrigramAssocMeasures()
 tri_meassures = {"Raw frequency":x.raw_freq, "Chi-squared":x.chi_sq, "Jaccard Index":x.jaccard, "Likelihood-ratio":x.likelihood_ratio, "Mutual Information":x.mi_like, "Pointwise mutual information":x.pmi, "Poisson-stirling":x.poisson_stirling, "Student's-t":x.student_t}
 training_mode = True
+db = database()
+opener = urllib2.build_opener()
+opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+word_list = []
 ##################
 
 def walkThrough():
@@ -52,38 +56,70 @@ def walkThrough():
             words = [pattern.sub('', x) for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
             for w in set(words):
                 testit(w)
-import urllib2
-opener = urllib2.build_opener()
-opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-word_list = []
+
+
 def testit(word):
+    word = unicode(word)
     global word_list
-    if wn.morphy(word) == None: #@UndefinedVariable
-        if len(wn.synsets(word)) == 0: #@UndefinedVariable
-            if not fwords.isFunctionWord(word):
-                if word not in word_list:
+    global db
+    if (len(word) > 1 and 
+        len(set(word) & set(string.letters)) > 0 and 
+        wn.morphy(word) == None and                     #@UndefinedVariable
+        len(wn.synsets(word)) == 0 and                  #@UndefinedVariable
+        not fwords.isFunctionWord(word)):
+        if word not in word_list:
+            inf = db.getSpelling(word)
+            if inf == None:
+                try:
                     page = opener.open("http://en.wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + word + "&srprop=timestamp").read()
                     r1 = re.compile(r"totalhits=\"(.*?)\"")
                     r2 = re.compile(r"suggestion=\"(.*?)\"")
                     m = [r1.search(page), r2.search(page)]
                     if m[0]:
                         if m[1]:
-                            print word + ": " + m[0].group(1) + ", suggested: " + m[1].group(1)
+                            distance = nltk.distance.edit_distance(word, m[1].group(1))
+                            db.saveSpelling(word, m[0].group(1), m[0].group(1), distance)
                         else:
-                            print word + ": " + m[0].group(1)
-                             
-#                    source = ""
-#                    for z in page:
-#                        source += z
-#                    page.close()                  
-#                    if "missing" not in source:
-#                        print source
-#                    else:
-#                        print "not in wiki: " + word
-#                        word_list.append(word)
+                            db.saveSpelling(word, m[0].group(1))
+                    else:
+                        print word
+                except:
+                    #encoding errors ignored. those words are not relevant, anyway
+                    pass
+            else:
+                isMissSpelled(inf)
+                #print inf
+
+def isMissSpelled(word_data):
+    try:
+        word = word_data[0]
+        hits = int(word_data[1])
+        suggestion = word_data[2]
+        distance = int(word_data[3])
+        
+#        if hits > 10:
+#            return False
+        
+        if suggestion != "":
+            if distance < 4:
+                print word + " - " + suggestion
+                return True
+        else:
+            if distToFuncWords(word) < 4:
+                #print "func word dist - " + word
+                return True
+            else:
+                return False
+    except:
+        return False
+
+def distToFuncWords(word):
+    '''returns a words smallest levenshtein distance to words in a set of function words'''
+    return min([nltk.distance.edit_distance(word, fw) for fw in fwords().getWords()])
 
 def main(args):
     global training_mode, test_method_bi, test_method_tri
+    #db.initData()
     walkThrough()
     #batchTest()
     #mostWritten()

@@ -18,12 +18,26 @@ class fwords(object):
         self.determiners = {"a": 0, "all": 0, "an": 0, "another": 0, "any": 0, "anybody": 0, "anything": 0, "both": 0, "each": 0, "either": 0, "enough": 0, "every": 0, "everybody": 0, "everyone": 0, "everything": 0, "few": 0, "fewer": 0, "he": 0, "her": 0, "hers": 0, "herself": 0, "him": 0, "himself": 0, "his": 0, "i": 0, "it": 0, "its": 0, "itself": 0, "less": 0, "many": 0, "me": 0, "mine": 0, "more": 0, "most": 0, "much": 0, "my": 0, "myself": 0, "neither": 0, "no": 0, "nobody": 0, "none": 0, "noone": 0, "nothing": 0, "other": 0, "others": 0, "our": 0, "ours": 0, "ourselves": 0, "she": 0, "some": 0, "somebody": 0, "someone": 0, "something": 0, "such": 0, "that": 0, "the": 0, "their": 0, "theirs": 0, "them": 0, "themselves": 0, "these": 0, "they": 0, "this": 0, "those": 0, "us": 0, "we": 0, "what": 0, "which": 0, "who": 0, "whom": 0, "whose": 0, "you": 0, "your": 0, "yours": 0, "yourself": 0, "yourselves": 0}
     
     def getCount(self):
+        '''
+        returns a dictionary with all function word counts
+        '''
         words = {}
         words.update(self.adverbs)
         words.update(self.auxillaries)
         words.update(self.prep_conj)
         words.update(self.determiners)
         return words
+    
+    def getWords(self):
+        '''
+        returns a list of all function words
+        '''
+        words = {}
+        words.update(self.adverbs)
+        words.update(self.auxillaries)
+        words.update(self.prep_conj)
+        words.update(self.determiners)
+        return words.keys()
     
     def processWord(self, word):
         '''
@@ -74,11 +88,8 @@ class fwords(object):
         return {key : (Decimal(value) / Decimal(size)) for key, value in self.getCount().iteritems()}
 
     def relativeFrequencyWordArray(self, words, size):
+        '''
+        takes a list of words; counts the function words and calculates their relative frequency based on size and returns it
+        '''
         self.processWordArray(words)
         return self.relativeFrequency(size)
-
-    #def getVector(self, text_length):
-        
-    def printCount(self):
-        for word_list in [self.adverbs, self.auxillaries, self.prep_conj, self.determiners]:
-            print word_list
