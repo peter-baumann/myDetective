@@ -555,10 +555,11 @@ class MainFrame(QMainWindow):
         self.meanVect = meanVect
         self.stdVect = stdVect
 
-        if len(data) > len(data[data.keys()[0]]):
-            self.visBut.setEnabled(True)
-        else:
-            self.visBut.setEnabled(False)
+# No longer needed with new PCA solution
+#        if len(data) > len(data[data.keys()[0]]):
+#            self.visBut.setEnabled(True)
+#        else:
+#            self.visBut.setEnabled(False)
 
         self.accInd.setText(format(acc, ".2f") + "%")
         self.accInd.setGreen(True)
@@ -666,11 +667,6 @@ def main():
 
     # Long imports here
     from Main import *
-    print "importing PCA tools..",
-    from matplotlib.mlab import PCA
-    import numpy
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
     print " done"
 
     frame = MainFrame()
