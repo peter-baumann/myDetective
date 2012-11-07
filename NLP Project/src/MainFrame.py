@@ -16,9 +16,11 @@ class TestDocWorker(QThread):
     done = pyqtSignal(object)
     msg = pyqtSignal(str)
     
-    def __init__(self, doc, model):
+    def __init__(self, doc, model, meanVect, stdVect):
         self.doc = doc
         self.model = model
+        self.meanVect = meanVect
+        self.stdVect = stdVect
         QThread.__init__(self)
 
     def __del__(self):
@@ -32,6 +34,10 @@ class TestDocWorker(QThread):
         self.msg.emit("Converting to attribute vector..")
         value = getAttributeVector(self.doc)
         value = [float(i) for i in value]
+        
+        self.msg.emit("Normalising values..")
+        # Normalize data
+        value = normalise("apply", [value], self.meanVect, self.stdVect)
 
         self.msg.emit("Predicting..")
         pred = svmtest(value, self.model)
@@ -41,12 +47,12 @@ class TestDocWorker(QThread):
 
 
 class TrainModelWorker(QThread):
-    done = pyqtSignal(object, object, object, object)
+    done = pyqtSignal(object, object, object, object, object, object)
     msg = pyqtSignal(str)
 
     def __init__(self, trainFolder, testFolder):
-        self.trainFolder = trainFolder + "\\"
-        self.testFolder = testFolder + "\\"
+        self.trainFolder = trainFolder + "/"
+        self.testFolder = testFolder + "/"
         QThread.__init__(self)
 
     def __del__(self):
@@ -67,9 +73,6 @@ class TrainModelWorker(QThread):
         values.extend(trvalues)
         values.extend(tsvalues)
         
-        self.msg.emit("Training model..")        
-        model, acc = xTrain(labels, values, 5, True)
-
         try:
             self.msg.emit("Collating data..")
 
@@ -84,9 +87,16 @@ class TrainModelWorker(QThread):
         except Exception as e:
             self.msg.emit("Exception: " + str(e))
             return
+        
+        self.msg.emit("Normalising values..")
+        # Normalize data
+        values, meanVect, stdVect = normalise(values)
+        
+        self.msg.emit("Training model..")        
+        model, acc = xTrain(labels, values, 5, True)
 
         self.msg.emit("Training completed.")
-        self.done.emit(model, acc, trAuthorList, data)
+        self.done.emit(model, acc, trAuthorList, data, meanVect, stdVect)
 
 class RoundButton(QPushButton):
     normColor = "#4f81bd"
@@ -250,7 +260,7 @@ class TrainWindow(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        self.pics = [QPixmap("images/author_" + str(int(i + 1)) + ".jpg").scaledToWidth(300) for i in range(self.indices)]
+        self.pics = [QPixmap("images/author_" + str(int(i + 1)) + ".jpg").scaled(300, 188, Qt.KeepAspectRatio) for i in range(self.indices)]
         self.mc = QWidget(self)
         self.labelTxt = QLabel("System working in progress", self.mc)
         self.labelTxt.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
@@ -328,7 +338,7 @@ class TestWindow(QMainWindow):
     def initUI(self):
         self.mc = QWidget(self)
         self.pic = QPixmap("images/author_" + str(int(self.index)) + ".jpg")
-        self.pic = self.pic.scaledToWidth(300)
+        self.pic = self.pic.scaled(300, 188, Qt.KeepAspectRatio)
         self.labelTxt = QLabel("The system \nevaluted that the \nfollowing person is \nthe most similar", self.mc)
         self.labelTxt.setStyleSheet("font-size: 14px;")
         self.labelPic = QLabel(self.mc)
@@ -431,6 +441,8 @@ class MainFrame(QMainWindow):
         self.model = None
         self.author_list = None
         self.data = None
+        self.meanVect = None
+        self.stdVect = None
 
         # Components
         minimize = RoundButton("-", mc)
@@ -536,10 +548,12 @@ class MainFrame(QMainWindow):
     def showMessage(self, text):
         print text
 
-    def trainComplete(self, model, acc, author_list, data):
+    def trainComplete(self, model, acc, author_list, data, meanVect, stdVect):
         self.model = model
         self.author_list = author_list
         self.data = data
+        self.meanVect = meanVect
+        self.stdVect = stdVect
 
         if len(data) > len(data[data.keys()[0]]):
             self.visBut.setEnabled(True)
@@ -571,7 +585,7 @@ class MainFrame(QMainWindow):
             self.testBut.setEnabled(False)
             self.trainFolderBut.setEnabled(False)
             self.testFolderBut.setEnabled(False)
-            worker = TestDocWorker(self.testDoc, self.model)
+            worker = TestDocWorker(self.testDoc, self.model, self.meanVect, self.stdVect)
             worker.done.connect(self.testComplete)
             worker.msg.connect(self.showMessage)
             worker.start()
