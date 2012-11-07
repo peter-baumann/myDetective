@@ -436,9 +436,17 @@ def get_essay_vectors():
     used by PCA
     """
     
+    global bi_filter, test_method_bi, test_method_tri
+
+    bi_filter = -1 #this will use the adaptive version of frequency filtering. E.g. if it is set to 2, bigrams have to appear at least twice in a text to be counted.
+
+    test_method_bi  = ["Raw frequency", bi_meassures["Raw frequency"]]
+    test_method_tri  = ["Raw frequency", tri_meassures["Raw frequency"]]
+
+
     global settings
     settings = {'FunctionWordFrequency' : True,
-        'BigramFrequency' : False,
+        'BigramFrequency' : True,
         'TrigramFrequency' : False,
         'AverageWordLength' : True,
         'AverageSentenceLength' : True,
