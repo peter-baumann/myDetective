@@ -8,7 +8,7 @@ import sys, random, os
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from svmtools.svmutil import *
-import pca
+import pca as pcaplot
 
 
 # Worker threads
@@ -519,7 +519,7 @@ class MainFrame(QMainWindow):
         self.show()
 
     def plotPCA(self):
-        pca = pca.PCAPlot()
+        pca = pcaplot.PCAPlot()
         pca.plot()
 
     def startTraining(self):
