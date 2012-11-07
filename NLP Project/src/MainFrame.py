@@ -531,7 +531,7 @@ class MainFrame(QMainWindow):
         self.show()
 
     def plotPCA(self):
-        pca = pcaplot.PCAPlot()
+        pca = pcaplot.PCAPlot(self.testDoc)
         pca.plot()
 
     def startTraining(self):
