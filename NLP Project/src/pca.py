@@ -5,14 +5,14 @@ import Main
 
 
 class PCAPlot():
-    def __init__(self):
+    def __init__(self, unknown=None):
         self.variables = []
         self.authors = []
         self.author_names = []
         self.essay_names = []
         i=-1
 
-        self.essay_vectors = Main.get_essay_vectors()
+        self.essay_vectors = Main.get_essay_vectors(unknown)
 
         for author, data in self.essay_vectors.iteritems():
             i += 1

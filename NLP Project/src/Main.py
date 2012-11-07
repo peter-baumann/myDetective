@@ -430,7 +430,7 @@ def mostWritten():
     print authors
 
 
-def get_essay_vectors():
+def get_essay_vectors(unknown=None):
     """
     Generates dictionary of authors/essays/measures
     used by PCA
@@ -461,6 +461,12 @@ def get_essay_vectors():
             # like the decimal.Decimal type
             vector = [float(i) for i in getAttributeVector(file[1])]
             essay_vectors[author][file[0]]=vector
+        
+    if unknown:
+        vector = [float(i) for i in getAttributeVector(unknown)]
+        essay_vectors["unknown"] = {}
+        essay_vectors["unknown"]["unknown"] = vector
+        
     return essay_vectors
 
 
