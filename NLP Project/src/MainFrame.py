@@ -311,7 +311,7 @@ class TrainWindow(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        self.pics = [QPixmap("images/batman (" + str(int(i + 1)) + ").jpg").scaledToWidth(300) for i in range(self.indices)]
+        self.pics = [QPixmap("images/author_" + str(int(i + 1)) + ".jpg").scaledToWidth(300) for i in range(self.indices)]
         self.mc = QWidget(self)
         self.labelTxt = QLabel("System working in progress", self.mc)
         self.labelTxt.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
@@ -388,7 +388,7 @@ class TestWindow(QMainWindow):
 
     def initUI(self):
         self.mc = QWidget(self)
-        self.pic = QPixmap("images/batman (" + str(int(self.index)) + ").jpg")
+        self.pic = QPixmap("images/author_" + str(int(self.index)) + ".jpg")
         self.pic = self.pic.scaledToWidth(300)
         self.labelTxt = QLabel("The system \nevaluted that the \nfollowing person is \nthe most similar", self.mc)
         self.labelTxt.setStyleSheet("font-size: 14px;")
