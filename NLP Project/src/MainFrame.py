@@ -8,69 +8,8 @@ import sys, random, os
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from svmtools.svmutil import *
+import pca
 
-# PCA
-class PCA():
-    def __init__(self, initData):
-        # imports
-        from matplotlib.mlab import PCA
-        import numpy
-
-        raw_data = initData
-        list_of_lists = []
-        self.list_of_authors = []
-        for author, data in raw_data.iteritems():
-        #    print author
-            for essay, data in data.iteritems():
-                self.list_of_authors.append(author)
-                list_of_lists.append(data)
-
-        # Convert a list-of-lists into a numpy array
-        data_matrix = numpy.array(list_of_lists)
-        self.results = PCA(data_matrix)
-                
-        self.x = []
-        self.y = []
-        self.z = []
-        for item in self.results.Y:
-        #    print "** " + str(item)
-            self.x.append(item[0])
-            self.y.append(item[1])
-            self.z.append(item[2])
-
-    def plot(self):
-        # imports
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-
-        plt.close('all') # close all latent plotting windows
-        fig1 = plt.figure() # Make a plotting figure
-        ax = Axes3D(fig1) # use the plotting figure to create a Axis3D object.
-        pltData = [self.x, self.y, self.z] 
-        #ax.scatter(pltData[0], pltData[1], pltData[2], 'bo') # make a scatter plot of blue dots from the data
-
-        for i in range(len(self.z)):
-            ax.plot([self.x[i]],[self.y[i]],[self.z[i]], marker='o', markersize=10, label=self.list_of_authors[i])
-            ax.text(self.x[i],self.y[i],self.z[i],self.list_of_authors[i], fontsize=16)
-        #   grid()
-
- 
-        # make simple, bare axis lines through space:
-        #xAxisLine = ((min(pltData[0]), max(pltData[0])), (0, 0), (0,0)) # 2 points make the x-axis line at the data extrema along x-axis 
-        #ax.plot(xAxisLine[0], xAxisLine[1], xAxisLine[2], 'r') # make a red line for the x-axis.
-        #yAxisLine = ((0, 0), (min(pltData[1]), max(pltData[1])), (0,0)) # 2 points make the y-axis line at the data extrema along y-axis
-        #ax.plot(yAxisLine[0], yAxisLine[1], yAxisLine[2], 'r') # make a red line for the y-axis.
-        #zAxisLine = ((0, 0), (0,0), (min(pltData[2]), max(pltData[2]))) # 2 points make the z-axis line at the data extrema along z-axis
-        #ax.plot(zAxisLine[0], zAxisLine[1], zAxisLine[2], 'r') # make a red line for the z-axis.
-
-        #ax.plot(x,y,z, "r")
- 
-        # label the axes 
-        ax.set_xlabel("x-axis label") 
-        ax.set_ylabel("y-axis label")
-        ax.set_zlabel("y-axis label")
-        ax.set_title("The title of the plot")
-        plt.show() # show the plot
 
 # Worker threads
 class TestDocWorker(QThread):
@@ -580,7 +519,7 @@ class MainFrame(QMainWindow):
         self.show()
 
     def plotPCA(self):
-        pca = PCA(self.data)
+        pca = pca.PCAPlot()
         pca.plot()
 
     def startTraining(self):
