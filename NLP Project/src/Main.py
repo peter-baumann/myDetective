@@ -255,7 +255,7 @@ def getAttributeVector(file_name):
     #part of speech
     
     #lexical diversity
-    diversity = [len(words) / len(set(words))] if settings['LexicalDiversity'] else []
+    diversity = [len(words) / float(len(set(words)))] if settings['LexicalDiversity'] else []
 
     #function word frequency
     if settings['FunctionWordFrequency']:
