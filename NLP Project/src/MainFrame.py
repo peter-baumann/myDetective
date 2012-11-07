@@ -465,7 +465,7 @@ class MainFrame(QMainWindow):
         # Components settings
         self.trainBut.setEnabled(False)
         self.catBut.setEnabled(False)
-        self.visBut.setEnabled(False)
+        self.visBut.setEnabled(True)
         self.testBut.setEnabled(False)
 
         self.emptySpace = QLabel()
