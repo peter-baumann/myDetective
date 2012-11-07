@@ -429,6 +429,33 @@ def mostWritten():
     authors = sorted(authors.items(), key=lambda (k, v): operator.itemgetter(1)(v), reverse=True)
     print authors
 
+
+def get_essay_vectors():
+    """
+    Generates dictionary of authors/essays/measures
+    used by PCA
+    """
+    
+    global settings
+    settings = {'FunctionWordFrequency' : True,
+        'BigramFrequency' : False,
+        'TrigramFrequency' : False,
+        'AverageWordLength' : True,
+        'AverageSentenceLength' : True,
+        'LexicalDiversity' : True}
+
+    authors = getAuthors()
+    essay_vectors = {}
+    for author, data in authors.iteritems():
+        essay_vectors[author] = {}
+        for file in data:
+            # convert all items to float, because PCA library does not
+            # like the decimal.Decimal type
+            vector = [float(i) for i in getAttributeVector(file[1])]
+            essay_vectors[author][file[0]]=vector
+    return essay_vectors
+
+
 def store(abs_frequencies, rel_frequencies, author_name, filename):
     print "generating training data statistics..."
     #storing results in database
