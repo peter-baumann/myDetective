@@ -73,7 +73,7 @@ def split(labels, values=None, k=5, rand=True):
 
     if values != None:
         # Normalize data
-        values, meanVect, stdVect = normalise(values)
+        #values, meanVect, stdVect = normalise(values)
 
         print "Patitioning into " + str(k) + " parts."
 
