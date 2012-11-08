@@ -78,8 +78,8 @@ class TrainModelWorker(QThread):
 
             authors = [dict() for i in range(len(trAuthorList))]
 
-            for i in range(len(trvalues)):
-                authors[int(trlabels[i]) - 1]["Essay " + str(i)] = trvalues[i]
+            for i in range(len(values)):
+                authors[int(labels[i]) - 1]["Essay " + str(i)] = values[i]
 
             data = dict()
             for i in range(len(trAuthorList)):
@@ -577,6 +577,11 @@ class MainFrame(QMainWindow):
             self.testDoc = doc
             self.catInd.setGreen(True)
             self.testBut.setEnabled(True)
+
+            from Main import *
+            # Add data file as unknown data
+            value = getAttributeVector(self.testDoc)            
+            self.data["unknown"] = dict("essay 1", value)
 
 
     def doTest(self):
