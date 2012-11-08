@@ -4,10 +4,11 @@ Created on 27.09.2012
 @author: Peter
 '''
 import operator
+import itertools
 print "loading libraries...",
 import sys, nltk, os, Data, string, re, math, collections, urllib2
 from fwords import fwords
-from database import database
+from database import database #@UnresolvedImport
 from decimal import *
 from corpusstatistics import corpusstatistics
 from nltk.corpus import LazyCorpusLoader
@@ -23,15 +24,19 @@ t = True
 settings = {'FunctionWordFrequency' : f, 
             'BigramFrequency' : f, 
             'TrigramFrequency' : f, 
-            'AverageWordLength' : t, 
+            'AverageWordLength' : f, 
             'AverageSentenceLength' : f, 
-            'LexicalDiversity' : f}
+            'LexicalDiversity' : f,
+            'spellingMistakes' : f,
+            'punctuation' : f,
+            'PartOfSpeech' : f}
 
 #don't change this
 bigramIndices = []
 trigramIndices = []
 bi_filter =  0
 tri_filter = 0
+spell_filter = 0
 test_method_bi  = [None,None]
 test_method_tri = [None,None]
 x = nltk.collocations.BigramAssocMeasures()
@@ -43,75 +48,150 @@ db = database()
 opener = urllib2.build_opener()
 opener.addheaders = [('User-agent', 'Mozilla/5.0')]
 word_list = []
+spellVector = []
+
+#Sequence of part of speech pairs is saved here
+pos_trans = []
+
+#cache for batch - if same feature several times calculated, this will be used to save cpu time
+feature_cache = {}
+enable_caching = t
 ##################
 
-def walkThrough():
-    authors = getAuthors()
-    pattern = re.compile('[\.\'\/]+')
-    for author in authors:
-        print "-----------------------------new author..."
-        for file_ in authors[author]:
-            print "-------------------------new file..."
-            text = Data.Data(file_[1]).text.lower()
-            words = [pattern.sub('', x) for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
-            for w in set(words):
-                testit(w)
+def partOfSpeechVector(sentences):
+    global pos_trans, bi_filter
+    tagged = nltk.batch_pos_tag(sentences)
+    
+    tags = []
+    for sentence in tagged:
+        td = [w[1] for w in sentence]
+        td.append("EOS") #add end of sentence "tag"
+        td.reverse()
+        td.append("SOS") #add start of sentence "tag"
+        td.reverse()
+        for t in td:
+            if all(c in string.letters for c in t):
+                tags.append(t)
+                
+    x =  BigramFrequencyToUnifiedVector(BigramFrequency(tags, bi_meassures["Raw frequency"], True))
+    return x
+
+def spellingVector(words):
+    global spellVector, spell_filter
+    tokens = [w for w in words if isMissSpelled(w)]
+    types = set(tokens)
+    filtered = []
+    
+    #Only consider words that appear for at least a certain threshold value spell_filter
+    for typ in types:
+        if tokens.count(typ) >= spell_filter:
+            filtered.append(typ)
+
+    spelling_mistakes = []
+    
+    for spell in spellVector:
+        if spell in filtered:
+            spelling_mistakes.append(1)
+        else:
+            spelling_mistakes.append(0)
+    
+    for typ in filtered:
+        spelling_mistakes.append(1)
+        spellVector.append(typ)
+    
+    return spelling_mistakes
+    
+
+def getWikipediaInformation(word):
+    inf = db.getSpelling(word)
+    if inf == None:
+        try:
+            page = opener.open("http://en.wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + word + "&srprop=timestamp").read()
+            r1 = re.compile(r"totalhits=\"(.*?)\"")
+            r2 = re.compile(r"suggestion=\"(.*?)\"")
+            m = [r1.search(page), r2.search(page)]
+            if m[0]:
+                if m[1]:
+                    distance = nltk.distance.edit_distance(word, m[1].group(1))
+                    db.saveSpelling(word, m[0].group(1), m[1].group(1), distance)
+                else:
+                    db.saveSpelling(word, m[0].group(1))
+            else:
+                return None
+        except:
+            return None
+    else:
+        return inf
 
 
-def testit(word):
-    word = unicode(word)
-    global word_list
-    global db
+def missSpelledFunctionWord(word):
+    #adaptive word distance limit depending on length of word
     if (len(word) > 1 and 
         len(set(word) & set(string.letters)) > 0 and 
         wn.morphy(word) == None and                     #@UndefinedVariable
         len(wn.synsets(word)) == 0 and                  #@UndefinedVariable
         not fwords.isFunctionWord(word)):
-        if word not in word_list:
-            inf = db.getSpelling(word)
-            if inf == None:
-                try:
-                    page = opener.open("http://en.wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + word + "&srprop=timestamp").read()
-                    r1 = re.compile(r"totalhits=\"(.*?)\"")
-                    r2 = re.compile(r"suggestion=\"(.*?)\"")
-                    m = [r1.search(page), r2.search(page)]
-                    if m[0]:
-                        if m[1]:
-                            distance = nltk.distance.edit_distance(word, m[1].group(1))
-                            db.saveSpelling(word, m[0].group(1), m[0].group(1), distance)
-                        else:
-                            db.saveSpelling(word, m[0].group(1))
-                    else:
-                        print word
-                except:
-                    #encoding errors ignored. those words are not relevant, anyway
-                    pass
-            else:
-                isMissSpelled(inf)
-                #print inf
+        
+            lim = math.ceil(math.log(len(word))) - 1 #@UndefinedVariable
+            if len(word) > 4:
+                if distToFuncWords(word) <= lim:
+                    return True
+            return False
+    else:
+        return False
+        
 
-def isMissSpelled(word_data):
-    try:
-        word = word_data[0]
-        hits = int(word_data[1])
-        suggestion = word_data[2]
-        distance = int(word_data[3])
-        
-#        if hits > 10:
-#            return False
-        
-        if suggestion != "":
-            if distance < 4:
-                print word + " - " + suggestion
-                return True
-        else:
-            if distToFuncWords(word) < 4:
-                #print "func word dist - " + word
-                return True
+def isMissSpelled(word):
+        try:
+            if (len(word) > 1 and 
+                len(set(word) & set(string.letters)) > 0 and 
+                wn.morphy(word) == None and                     #@UndefinedVariable
+                len(wn.synsets(word)) == 0 and                  #@UndefinedVariable
+                not fwords.isFunctionWord(word) and
+                len(word.split("-")) == 1):
+                
+                word_data = getWikipediaInformation(word)
+                if word_data == None:
+                    return False
+                hits = int(word_data[1])
+                suggestion = word_data[2]
+                distance = int(word_data[3])
+
+                if suggestion != "":
+                    return True
+                else:
+                    if distToFuncWords(word) < 3:
+                        return True
+                    else:
+#                        if hits < 10:
+#                            return True
+#                        else:
+                        return False
+                        
+                        
+#                if hits == 0:
+#                    if suggestion != "":
+#                        #assume no spelling error - probably some proper name which is not very common
+#                        return False
+                
+#                if hits < 10:
+#                    if suggestion != "":
+#                        if distance < 4:
+#                            return True
+#                        else:
+#                            return False
+#                    else:
+#                        if distToFuncWords(word) < 3:
+#                            return True
+#                        else:
+#                            return False
+#                else:
+#                    return False
+                    
             else:
                 return False
-    except:
-        return False
+        except:
+            return False
 
 def distToFuncWords(word):
     '''returns a words smallest levenshtein distance to words in a set of function words'''
@@ -119,9 +199,11 @@ def distToFuncWords(word):
 
 def main(args):
     global training_mode, test_method_bi, test_method_tri
-    #db.initData()
-    walkThrough()
-    #batchTest()
+    #db.initWikipediaCache()
+    
+    
+    
+    batchTest()
     #mostWritten()
 #    train = "training.lsvm"
 #    test = "testing.lsvm"
@@ -139,66 +221,110 @@ def main(args):
         
 def batchTest():
     '''This function tests all possible combinations of features using cross validation'''
-    global t, f, bi_filter, tri_filter
+    global t, f, bi_filter, tri_filter, spell_filter, settings, test_method_bi, test_method_tri
     output = "cross.lsvm"
     authors = getAuthors('../crosstesting/')
     
     print "\n--------------------------------------------------------------------------------"
     print "--Batch Testing of all possible combinations of features with cross validation--"
-    print "--This test can take some hours - depending on your CPU and number of documents-"
+    print "--This test can take many hours - depending on your CPU and number of documents-"
     print "--------------------------------------------------------------------------------\n"
     print "Testing with: " + str(len(authors)) + " authors and a total of " + str(sum([len(authors[x]) for x in authors])) + " documents\n\n"
     
-    print "1) Single Feature Statistics:"
-    print "   [a] Average Word Length:"
-    cset(f,f,f,t,f,f)
-    crosstesting(output)
+#    bi_filter = 2
+#    cset(f,f,f,f,f,f,f,f,t)
+#    
+#    crosstesting(output)
     
-    print "   [b] Average Sentence Length:"
-    cset(f,f,f,f,t,f)
-    crosstesting(output)
-      
-    print "   [c] Lexical Diversity:"
-    cset(f,f,f,f,f,t)
-    crosstesting(output)
+    #using best results from previous test runs
+#    bi_filter =  -1
+#    tri_filter = 1
+#    test_method_bi  = ["Raw frequency", bi_meassures["Raw frequency"]]
+#    test_method_tri = ["Pointwise mutual information",tri_meassures["Pointwise mutual information"]]
     
-    print "   [d] Function Word Bigram Frequency using different association measures and frequency filters:"
-    cset(f,t,f,f,f,f)
-    for mes in bi_meassures:
-        for i in range(1, 5):
-            bi_filter = i
-            test_method_bi[0] = mes
-            test_method_bi[1] = bi_meassures[mes]
-            print "       " + mes + " with frequency filter = " + str(i) + ":"
-            crosstesting(output)
-        bi_filter = -1 # this tells the function to use adaptive one
-        test_method_bi[0] = mes
-        test_method_bi[1] = bi_meassures[mes]
-        print "       " + mes + " with adaptive frequency filter based on text length:"
-        crosstesting(output)
+#    used = []
+#    for key in settings.keys():
+#        combine = []
+#        combine.append(key)
+#        used.append(key)
+#        for key2 in [k for k in settings.keys() if used.count(k) == 0]:
+#            cset()
+#            settings[key] = t
+#            settings[key2] = t
+#            print key + " - " + key2
+#            crosstesting(output)
+    
+    
+#    for i in range(3, len(settings.keys()) + 1):
+#        print "combinations of " + str(i) + " features:"
+#        for x in itertools.combinations(settings.keys(), i):
+#            print " - ".join(x) + ":"
+#            cset()
+#            for key in x:
+#                settings[key] = t
+#            crosstesting(output)
+    
+#    print "spelling errors:"
+#    cset(f,f,f,f,f,f,t)
+#    for i in range(1, 5):
+#        print str(i) + ":"
+#        spell_filter = i
+#        crosstesting(output)
+    
+#    print "1) Single Feature Statistics:"
+#    print "   [a] Average Word Length:"
+#    cset(f,f,f,t)
+#    crosstesting(output)
+#    
+#    print "   [b] Average Sentence Length:"
+#    cset(f,f,f,f,t)
+#    crosstesting(output)
+#      
+#    print "   [c] Lexical Diversity:"
+#    cset(f,f,f,f,f,t)
+#    crosstesting(output)
+    
+#    print "   [d] Function Word Bigram Frequency using different association measures and frequency filters:"
+#    cset(f,t)
+#    for mes in bi_meassures:
+#        for i in range(1, 5):
+#            bi_filter = i
+#            test_method_bi[0] = mes
+#            test_method_bi[1] = bi_meassures[mes]
+#            print "       " + mes + " with frequency filter = " + str(i) + ":"
+#            crosstesting(output)
+#        bi_filter = -1 # this tells the function to use adaptive one
+#        test_method_bi[0] = mes
+#        test_method_bi[1] = bi_meassures[mes]
+#        print "       " + mes + " with adaptive frequency filter based on text length:"
+#        crosstesting(output)
         
-    print "   [d] Function Word Trigram Frequency using different association measures and frequency filters:"
-    cset(f,f,t,f,f,f)
-    for mes in tri_meassures:
-        for i in range(1, 5):
-            tri_filter = i
-            test_method_tri[0] = mes
-            test_method_tri[1] = tri_meassures[mes]
-            print "       " + mes + " with frequency filter = " + str(i) + ":"
-            crosstesting(output)
-        tri_filter = -1 # this tells the function to use adaptive one
-        test_method_tri[0] = mes
-        test_method_tri[1] = tri_meassures[mes]
-        print "       " + mes + " with adaptive frequency filter based on text length:"
-        crosstesting(output)
+#    print "   [d] Function Word Trigram Frequency using different association measures and frequency filters:"
+#    cset(f,f,t)
+#    for mes in tri_meassures:
+#        for i in range(1, 5):
+#            tri_filter = i
+#            test_method_tri[0] = mes
+#            test_method_tri[1] = tri_meassures[mes]
+#            print "       " + mes + " with frequency filter = " + str(i) + ":"
+#            crosstesting(output)
+#        tri_filter = -1 # this tells the function to use adaptive one
+#        test_method_tri[0] = mes
+#        test_method_tri[1] = tri_meassures[mes]
+#        print "       " + mes + " with adaptive frequency filter based on text length:"
+#        crosstesting(output)
         
     print "   [f] Function Word Frequency:"
-    cset(t,f,f,f,f,f)
+    cset(t)
     crosstesting(output)
-    
-    print "Combined Feature Statistics:"
+#    
+#    print "Combined Feature Statistics:"
 
-def cset(FunctionWordFrequency, BigramFrequency, TrigramFrequency, AverageWordLength, AverageSentenceLength, LexicalDiversity):
+def cset(FunctionWordFrequency = False, BigramFrequency = False, 
+         TrigramFrequency = False, AverageWordLength = False, 
+         AverageSentenceLength = False, LexicalDiversity = False, 
+         spellingMistakes = False, punctuation = False,
+         partOfSpeech = False):
     '''change settings'''
     global settings
     settings['FunctionWordFrequency'] = FunctionWordFrequency
@@ -207,6 +333,9 @@ def cset(FunctionWordFrequency, BigramFrequency, TrigramFrequency, AverageWordLe
     settings['AverageWordLength'] = AverageWordLength
     settings['AverageSentenceLength'] = AverageSentenceLength
     settings['LexicalDiversity'] = LexicalDiversity
+    settings['spellingMistakes'] = spellingMistakes
+    settings['punctuation'] = punctuation
+    settings['PartOfSpeech'] = partOfSpeech
 
 def crosstesting(filen):
     processAuthorFolder('../crosstesting/', filen)
@@ -227,18 +356,20 @@ def svm(train, test = None):
         cmd = './svmtools/easy.py "{0}" "{1}"'.format(train, test)
         output = Popen(cmd, shell = True, stdout = PIPE, stderr = None)
         text = output.stdout.read()
-        r = re.compile('Accuracy\s=\s(.*?)\s\(classification\)')
-        m = r.search(text)
-        if m:
-            print test_method_bi[0] + ": " + m.group(1)
+        print text
+#        r = re.compile('Accuracy\s=\s(.*?)\s\(classification\)')
+#        m = r.search(text)
+#        if m:
+#            print test_method_bi[0] + ": " + m.group(1)
     else:
         cmd = './svmtools/easy.py "{0}"'.format(train)
         output = Popen(cmd, shell = True, stdout = PIPE, stderr = None)
         text = output.stdout.read()
-        r = re.compile(r'CV\srate=(.*?)\n')
-        m = r.search(text)
-        if m:
-            print "------> " + m.group(1) + "%"
+        print text
+#        r = re.compile(r'CV\srate=(.*?)\n')
+#        m = r.search(text)
+#        if m:
+#            print "------> " + m.group(1) + "%"
 
 def testDocument():
     pass
@@ -268,38 +399,144 @@ def getAuthors(path = '../training/'):
     return authors
     
 def getAttributeVector(file_name):
-    global bigramIndices, training_mode, settings
+    global bigramIndices, training_mode, settings, feature_cache, enable_caching
     text = Data.Data(file_name).text.lower()
     sentences = nltk.sent_tokenize(text)
-    words = [x for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
+    #words = [x for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
+    pattern = re.compile('[\.\'\/]+')
+    words = [pattern.sub('', x) for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
     
     #punctuation
+    if settings['punctuation']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('punctuation'):
+                punctuation = feature_cache[file_name]['punctuation']
+            else:
+                punctuation = punctuationVector(text) 
+                feature_cache[file_name].update({'punctuation' : punctuation})
+        else:
+            punctuation = punctuationVector(text) 
+            feature_cache.update({file_name:{'punctuation' : punctuation}})
+    else: 
+        punctuation = []
     
     #part of speech
     
+    #spelling mistakes
+    if settings['spellingMistakes']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('spellingMistakes'):
+                spelling = feature_cache[file_name]['spellingMistakes']
+            else:
+                spelling = spellingVector(words)
+                feature_cache[file_name].update({'spellingMistakes' : spelling})
+        else:
+            spelling = spellingVector(words)
+            feature_cache.update({file_name:{'spellingMistakes' : spelling}})
+    else: 
+        spelling = []
+    
     #lexical diversity
-    diversity = [len(words) / len(set(words))] if settings['LexicalDiversity'] else []
+    if settings['LexicalDiversity']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('LexicalDiversity'):
+                diversity = feature_cache[file_name]['LexicalDiversity']
+            else:
+                diversity = [len(words) / len(set(words))]
+                feature_cache[file_name].update({'LexicalDiversity' : diversity})
+        else:
+            diversity = [len(words) / len(set(words))]
+            feature_cache.update({file_name:{'LexicalDiversity' : diversity}})
+    else: 
+        diversity = []
 
     #function word frequency
     if settings['FunctionWordFrequency']:
-        fwords = fwordFrequency(words, len(words))
-        fword_frequency = [fwords[f] for f in fwords]
-    else:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('FunctionWordFrequency'):
+                fword_frequency = feature_cache[file_name]['FunctionWordFrequency']
+            else:
+                fwords = fwordFrequency(words, len(words))
+                fword_frequency = [fwords[f] for f in fwords]
+                feature_cache[file_name].update({'FunctionWordFrequency' : fword_frequency})
+        else:
+            fwords = fwordFrequency(words, len(words))
+            fword_frequency = [fwords[f] for f in fwords]
+            feature_cache.update({file_name:{'FunctionWordFrequency' : fword_frequency}})
+    else: 
         fword_frequency = []
     
     #average word length
-    avg_word = [average_word_length(words)] if settings['AverageWordLength'] else []
+    if settings['AverageWordLength']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('AverageWordLength'):
+                avg_word = feature_cache[file_name]['AverageWordLength']
+            else:
+                avg_word = [average_word_length(words)]
+                feature_cache[file_name].update({'AverageWordLength' : avg_word})
+        else:
+            avg_word = [average_word_length(words)]
+            feature_cache.update({file_name:{'AverageWordLength' : avg_word}})
+    else: 
+        avg_word = []
     
     #average sentence length
-    avg_sent = [average_sentence_length(sentences)] if settings['AverageSentenceLength'] else []
+    if settings['AverageSentenceLength']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('AverageSentenceLength'):
+                avg_sent = feature_cache[file_name]['AverageSentenceLength']
+            else:
+                avg_sent = [average_sentence_length(sentences)]
+                feature_cache[file_name].update({'AverageSentenceLength' : avg_sent})
+        else:
+            avg_sent = [average_sentence_length(sentences)]
+            feature_cache.update({file_name:{'AverageSentenceLength' : avg_sent}})
+    else: 
+        avg_sent = []
     
     #Function Word Bigram Frequency
-    bigram_frequency = BigramFrequencyToUnifiedVector(BigramFrequency(words, test_method_bi[1])) if settings['BigramFrequency'] else []
+    if settings['BigramFrequency']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('BigramFrequency'):
+                bigram_frequency = feature_cache[file_name]['BigramFrequency']
+            else:
+                bigram_frequency = BigramFrequencyToUnifiedVector(BigramFrequency(words, test_method_bi[1]))
+                feature_cache[file_name].update({'BigramFrequency' : bigram_frequency})
+        else:
+            bigram_frequency = BigramFrequencyToUnifiedVector(BigramFrequency(words, test_method_bi[1]))
+            feature_cache.update({file_name:{'BigramFrequency' : bigram_frequency}})
+    else: 
+        bigram_frequency = []
     
     #Trigram frequencies
-    trigram_frequency = TrigramFrequencyToUnifiedVector(TrigramFrequency(words, test_method_tri[1])) if settings['TrigramFrequency'] else []
+    if settings['TrigramFrequency']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('TrigramFrequency'):
+                trigram_frequency = feature_cache[file_name]['TrigramFrequency']
+            else:
+                trigram_frequency = TrigramFrequencyToUnifiedVector(TrigramFrequency(words, test_method_tri[1]))
+                feature_cache[file_name].update({'TrigramFrequency' : trigram_frequency})
+        else:
+            trigram_frequency = TrigramFrequencyToUnifiedVector(TrigramFrequency(words, test_method_tri[1]))
+            feature_cache.update({file_name:{'TrigramFrequency' : trigram_frequency}})
+    else: 
+        trigram_frequency = []
     
-    return diversity + fword_frequency + avg_word + avg_sent + bigram_frequency + trigram_frequency
+    #PartOfSpeech
+    if settings['PartOfSpeech']:
+        if enable_caching and feature_cache.has_key(file_name):
+            if feature_cache[file_name].has_key('PartOfSpeech'):
+                part_of_speech = feature_cache[file_name]['PartOfSpeech']
+            else:
+                part_of_speech = partOfSpeechVector([nltk.word_tokenize(snt) for snt in sentences])
+                feature_cache[file_name].update({'PartOfSpeech' : part_of_speech})
+        else:
+            part_of_speech = partOfSpeechVector([nltk.word_tokenize(snt) for snt in sentences])
+            feature_cache.update({file_name:{'PartOfSpeech' : part_of_speech}})
+    else: 
+        part_of_speech = []
+    
+    return diversity + fword_frequency + avg_word + avg_sent + bigram_frequency + trigram_frequency + spelling + part_of_speech
 
 def bigramsToStringVector(bigrams):
     return {b[0][0] + "_" + b[0][1] : b[1] for b in bigrams}
@@ -326,7 +563,6 @@ def prepare_ngrams(ngrams):
             if word in ["his", "hers"]: ngrams[index_ngram][index_word]="its"
     return ngrams
 
-
 def average_word_length(words):
     """ Calculates the average length of a word in array.
         Will reject all non-words with regular expression."""
@@ -342,14 +578,14 @@ def average_sentence_length(sentences):
     """ Calculates the average length (in words) of a sentence in array."""
     length_total = 0
     for sentence in sentences:
-        length_total += len(sentence.split())
+        length_total += len(nltk.word_tokenize(sentence))
     return length_total/float(len(sentences))
     
 def fwordFrequency(words, token_count):
     text_fwords = fwords()
     return text_fwords.relativeFrequencyWordArray(words, token_count)
 
-def BigramFrequency(words, test_method):
+def BigramFrequency(words, test_method, pos = False):
     global bi_filter
     return_array = []
     finder = BigramCollocationFinder.from_words(words)
@@ -359,7 +595,7 @@ def BigramFrequency(words, test_method):
         finder.apply_freq_filter(math.ceil(math.log(len(words) - 1) /3) - 1) #@UndefinedVariable
     scored = finder.score_ngrams(test_method)
     for score in scored:
-        if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1])):
+        if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1])) or pos:
             return_array.append(score)
     return return_array
 
@@ -391,7 +627,7 @@ def BigramFrequencyToUnifiedVector(bg_freq):
                 pass
     return [b[1] for b in bigram_vector]
     
-def TrigramFrequency(words, test_method):
+def TrigramFrequency(words, test_method, pos = False):
     global tri_filter
     return_array = []
     finder = TrigramCollocationFinder.from_words(words)
@@ -401,7 +637,7 @@ def TrigramFrequency(words, test_method):
         finder.apply_freq_filter(math.ceil(math.log(len(words) - 1) /3) - 1) #@UndefinedVariable
     scored = finder.score_ngrams(test_method)
     for score in scored:
-        if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1]) and fwords.isFunctionWord(score[0][2])):
+        if(not pos and fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1]) and fwords.isFunctionWord(score[0][2])):
             return_array.append(score)
     return return_array
 
@@ -433,7 +669,7 @@ def TrigramFrequencyToUnifiedVector(bg_freq):
                 pass
     return [b[1] for b in trigram_vector]  
 
-def punctuation(text):
+def punctuationVector(text):
     '''returns a vector with punctuation statistics from a text'''
     size = len(text)
     return [Decimal(text.count(".")) / Decimal(size), 
@@ -445,9 +681,6 @@ def punctuation(text):
             Decimal(text.count("-")) / Decimal(size)]
     pass
 
-def spelling(text):
-    '''returns a vector with statistics about spelling mistakes in a text. Further idea: distance from common word, more as 2 appearances'''
-    pass
 
 #just a helper function for finding the students with the most text data
 def mostWritten():

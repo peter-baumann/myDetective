@@ -55,6 +55,7 @@ f = Popen(cmd, shell = True, stdout = PIPE).stdout
 
 line = ''
 while True:
+	#print line
 	last_line = line
 	line = f.readline()
 	if not line: break

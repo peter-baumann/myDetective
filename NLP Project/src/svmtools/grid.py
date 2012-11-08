@@ -245,6 +245,7 @@ class LocalWorker(Worker):
           (svmtrain_exe,c,g,fold,pass_through_string,dataset_pathname)
         result = Popen(cmdline,shell=True,stdout=PIPE).stdout
         for line in result.readlines():
+            #print line
             if str(line).find("Cross") != -1:
                 return float(line.split()[-1][0:-1])
 
