@@ -580,8 +580,10 @@ class MainFrame(QMainWindow):
 
             from Main import *
             # Add data file as unknown data
-            value = getAttributeVector(self.testDoc)            
-            self.data["unknown"] = dict("essay 1", value)
+            value = getAttributeVector(self.testDoc)
+            essay1 = dict()
+            essay1["essay 1"] = value
+            self.data["unknown"] = essay1
 
 
     def doTest(self):
