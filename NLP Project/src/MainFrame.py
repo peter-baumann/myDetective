@@ -581,6 +581,7 @@ class MainFrame(QMainWindow):
             from Main import *
             # Add data file as unknown data
             value = getAttributeVector(self.testDoc)
+            value = [float(i) for i in value]
             essay1 = dict()
             essay1["essay 1"] = value
             self.data["unknown"] = essay1
