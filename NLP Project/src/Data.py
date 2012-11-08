@@ -4,7 +4,7 @@ Created on 27.09.2012
 @author: Peter
 '''
 #from src.parser.pdf2text import pdf2text
-from parser.text import textp
+from p.text import textp
 
 class Data(object):
     '''

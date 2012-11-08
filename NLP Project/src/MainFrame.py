@@ -8,7 +8,6 @@ import sys, random, os
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from svmtools.svmutil import *
-import pca as pcaplot
 
 
 # Worker threads
@@ -44,8 +43,7 @@ class TestDocWorker(QThread):
 
         self.msg.emit("Prediction complete.")
         self.done.emit(pred)
-
-
+        
 class TrainModelWorker(QThread):
     done = pyqtSignal(object, object, object, object, object, object)
     msg = pyqtSignal(str)
@@ -72,6 +70,10 @@ class TrainModelWorker(QThread):
         labels.extend(tslabels)
         values.extend(trvalues)
         values.extend(tsvalues)
+                
+        self.msg.emit("Normalising values..")
+        # Normalize data
+        values, meanVect, stdVect = normalise(values)
         
         try:
             self.msg.emit("Collating data..")
@@ -87,16 +89,44 @@ class TrainModelWorker(QThread):
         except Exception as e:
             self.msg.emit("Exception: " + str(e))
             return
-        
-        self.msg.emit("Normalising values..")
-        # Normalize data
-        values, meanVect, stdVect = normalise(values)
-        
+
         self.msg.emit("Training model..")        
         model, acc = xTrain(labels, values, 5, True)
 
         self.msg.emit("Training completed.")
         self.done.emit(model, acc, trAuthorList, data, meanVect, stdVect)
+
+class ProcessTestDoc(QThread):
+    msg = pyqtSignal(str)
+    done = pyqtSignal(object)
+
+    def __init__(self, docLoc, meanVect, stdVect):
+        self.docLoc = docLoc
+        self.meanVect = meanVect
+        self.stdVect = stdVect
+        QThread.__init__(self)
+
+    def __del__(self):
+        self.wait()
+
+    def run(self):        
+        from Main import *
+        # Add gather feature vector for unknown author
+        self.msg.emit("Extracting feature vector for unknown author..")
+        value = getAttributeVector(self.docLoc)
+        
+        self.msg.emit("Converting feature vector to float values..")
+        value = [float(i) for i in value]
+        
+        self.msg.emit("Normalising values..")
+        # Normalize data
+        value = normalise("apply", [value], self.meanVect, self.stdVect)
+
+        essay1 = dict()
+        essay1["essay 1"] = value[0]
+        self.msg.emit("Dictionary entry created.")
+        self.done.emit(essay1)
+        import pca as pcaplot
 
 class RoundButton(QPushButton):
     normColor = "#4f81bd"
@@ -477,7 +507,7 @@ class MainFrame(QMainWindow):
         # Components settings
         self.trainBut.setEnabled(False)
         self.catBut.setEnabled(False)
-        self.visBut.setEnabled(True)
+        self.visBut.setEnabled(False)
         self.testBut.setEnabled(False)
 
         self.emptySpace = QLabel()
@@ -530,8 +560,13 @@ class MainFrame(QMainWindow):
         self.setWindowTitle("My Detective")
         self.show()
 
-    def plotPCA(self):
-        pca = pcaplot.PCAPlot(self.testDoc)
+    def plotPCA(self):        
+        import pca as pcaplot
+
+        print "Initialising PCA.."
+        pca = pcaplot.PCAPlot(self.data)
+        print "PCA initalised"
+        print "Plot PCA"
         pca.plot()
 
     def startTraining(self):
@@ -554,12 +589,9 @@ class MainFrame(QMainWindow):
         self.data = data
         self.meanVect = meanVect
         self.stdVect = stdVect
-
-# No longer needed with new PCA solution
-#        if len(data) > len(data[data.keys()[0]]):
-#            self.visBut.setEnabled(True)
-#        else:
-#            self.visBut.setEnabled(False)
+        
+        # Enable PCA button
+        self.visBut.setEnabled(True)
 
         self.accInd.setText(format(acc, ".2f") + "%")
         self.accInd.setGreen(True)
@@ -575,17 +607,25 @@ class MainFrame(QMainWindow):
 
         if doc:
             self.testDoc = doc
-            self.catInd.setGreen(True)
-            self.testBut.setEnabled(True)
+            # Disable cat button temporarily
+            self.temp = str(self.catBut.text())
+            self.catBut.setText("Loading..")
+            self.catBut.setEnabled(False)
 
-            from Main import *
-            # Add data file as unknown data
-            value = getAttributeVector(self.testDoc)
-            value = [float(i) for i in value]
-            essay1 = dict()
-            essay1["essay 1"] = value
-            self.data["unknown"] = essay1
+            worker = ProcessTestDoc(self.testDoc, self.meanVect, self.stdVect)
+            worker.done.connect(self.processedTestData)
+            worker.msg.connect(self.showMessage)
+            worker.start()
+            
+    def processedTestData(self, data):
+        self.data["unknown"] = data
+        print "Accepted unknown feature vector"
 
+        # Enable buttons
+        self.catInd.setGreen(True)
+        self.catBut.setText(self.temp)
+        self.catBut.setEnabled(True)
+        self.testBut.setEnabled(True)
 
     def doTest(self):
         if self.testDoc:
@@ -675,6 +715,8 @@ def main():
 
     # Long imports here
     from Main import *
+    print "Loading PCA...",
+    import pca as pcaplot
     print " done"
 
     frame = MainFrame()
