@@ -32,7 +32,7 @@ class Param(object):
 
     @property
     def libsvm(self):
-        return "-c " + str(self._c) + " -g " + str(self._g)
+        return "-c " + str(self._c) + " -g " + str(self._g) + " -q"
 
     @property
     def cset(self):
@@ -51,3 +51,29 @@ class Param(object):
     def gset(self, value):
         if isinstance(value, list):
             self._gset = value
+
+class Partitions():
+    def __init__(self, partitions):
+        self.iter = []
+        for i in range(len(partitions)):
+            testSet = partitions[i]
+            trainSetValues = []
+            trainSetLabels = []
+            for j in range(len(partitions)):
+                if j != i:
+                    trainSetValues.extend(partitions[j].values)
+                    trainSetLabels.extend(partitions[j].labels)
+            
+            trainSet = DataSet(trainSetLabels, trainSetValues)
+            partition = Partition(trainSet, testSet)
+            self.iter.append(partition)
+
+class Partition():
+    def __init__(self, trainSet, testSet):
+        self.train = trainSet
+        self.test = testSet
+
+class DataSet():
+    def __init__(self, labels, values):
+        self.labels = labels
+        self.values = values

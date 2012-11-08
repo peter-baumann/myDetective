@@ -17,6 +17,7 @@ from nltk.tag import *
 from nltk.collocations import *
 from subprocess import *
 from nltk.corpus import wordnet as wn
+from svmtools.SvmInterface import *
 print "- done"
 
 f = False
@@ -30,6 +31,15 @@ settings = {'FunctionWordFrequency' : f,
             'spellingMistakes' : f,
             'punctuation' : f,
             'PartOfSpeech' : f}
+
+# Constants 
+class Mode:
+    FunctionWordFrequency = 1
+    BigramFrequency = 2
+    TrigramFrequency = 4
+    AverageWordLength = 8
+    AverageSentenceLength = 16
+    LexicalDiversity = 32
 
 #don't change this
 bigramIndices = []
@@ -197,7 +207,7 @@ def distToFuncWords(word):
     '''returns a words smallest levenshtein distance to words in a set of function words'''
     return min([nltk.distance.edit_distance(word, fw) for fw in fwords().getWords()])
 
-def main(args):
+def main(args = None):
     global training_mode, test_method_bi, test_method_tri
     #db.initWikipediaCache()
     
@@ -356,20 +366,18 @@ def svm(train, test = None):
         cmd = './svmtools/easy.py "{0}" "{1}"'.format(train, test)
         output = Popen(cmd, shell = True, stdout = PIPE, stderr = None)
         text = output.stdout.read()
-        print text
-#        r = re.compile('Accuracy\s=\s(.*?)\s\(classification\)')
-#        m = r.search(text)
-#        if m:
-#            print test_method_bi[0] + ": " + m.group(1)
+        r = re.compile('Accuracy\s=\s(.*?)\s\(classification\)')
+        m = r.search(text)
+        if m:
+            print test_method_bi[0] + ": " + m.group(1)
     else:
         cmd = './svmtools/easy.py "{0}"'.format(train)
         output = Popen(cmd, shell = True, stdout = PIPE, stderr = None)
         text = output.stdout.read()
-        print text
-#        r = re.compile(r'CV\srate=(.*?)\n')
-#        m = r.search(text)
-#        if m:
-#            print "------> " + m.group(1) + "%"
+        r = re.compile(r'CV\srate=(.*?)\n')
+        m = r.search(text)
+        if m:
+            print "------> " + m.group(1) + "%"
 
 def testDocument():
     pass
@@ -385,13 +393,61 @@ def processAuthorFolder(input_folder, output_file):
             wfile.write(listToSVMVector(author_id, getAttributeVector(file_[1])))
     wfile.close()
     
+def extractVectors(input_folder):    
+    authors = getAuthors(input_folder)
+    author_id = 0
+    labels = []
+    values = []
+    author_list = []
+    for author in authors:
+        author_id += 1
+        author_list.append(author)
+        for file_ in authors[author]:
+            labels.append(author_id)
+            values.append(getAttributeVector(file_[1]))
+
+    return labels, values, author_list
+
+def setMode(mode):
+    cset(f, f, f, f, f, f)
+    atLeast1Mode = False
+    # test type
+    if mode & Mode.FunctionWordFrequency == Mode.FunctionWordFrequency:
+        print "mode 1"
+        cset(t,f,f,f,f,f)
+        atLeast1Mode = True
+    if mode & Mode.BigramFrequency == Mode.BigramFrequency:
+        print "mode 2"
+        cset(f,f,f,t,f,f)
+        atLeast1Mode = True
+    if mode & Mode.TrigramFrequency == Mode.TrigramFrequency:
+        print "mode 3"
+        cset(f,f,f,t,f,f)
+        atLeast1Mode = True
+    if mode & Mode.AverageWordLength == Mode.AverageWordLength:
+        print "mode 4"
+        cset(f,f,f,t,f,f)
+        atLeast1Mode = True
+    if mode & Mode.AverageSentenceLength == Mode.AverageSentenceLength:
+        print "mode 5"
+        cset(f,f,f,f,t,f)
+        atLeast1Mode = True
+    if mode & Mode.LexicalDiversity == Mode.LexicalDiversity:
+        print "mode 6"
+        cset(f,f,f,f,f,t)
+        atLeast1Mode = True
+    if atLeast1Mode == False:
+        print "mode err"
+        return    # invalid mode
+    
 def getAuthors(path = '../training/'):
     """returns a list of authors with corresponding files."""
     authors = collections.OrderedDict()
     author_listing = os.listdir(path)
     for author in author_listing:
         if os.path.isdir(path + author):
-            author_path = os.path.join(path, author) + "/"
+            author_path = os.path.join(path, author)
+            author_path += "/"
             file_listing = os.listdir(author_path)
             file_listing = [[file_, author_path + file_] for file_ in file_listing]
             if len(file_listing) > 0:
@@ -442,10 +498,10 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('LexicalDiversity'):
                 diversity = feature_cache[file_name]['LexicalDiversity']
             else:
-                diversity = [len(words) / len(set(words))]
+                diversity = [len(words) / float(len(set(words)))]
                 feature_cache[file_name].update({'LexicalDiversity' : diversity})
         else:
-            diversity = [len(words) / len(set(words))]
+            diversity = [len(words) / float(len(set(words)))]
             feature_cache.update({file_name:{'LexicalDiversity' : diversity}})
     else: 
         diversity = []
@@ -701,8 +757,48 @@ def mostWritten():
     authors = sorted(authors.items(), key=lambda (k, v): operator.itemgetter(1)(v), reverse=True)
     print authors
 
-if __name__ == '__main__':
-    main(sys.exit(main(sys.argv)))    
+
+def get_essay_vectors(unknown=None):
+    """
+    Generates dictionary of authors/essays/measures
+    used by PCA
+    """
+    
+    global bi_filter, test_method_bi, test_method_tri
+
+    bi_filter = -1 #this will use the adaptive version of frequency filtering. E.g. if it is set to 2, bigrams have to appear at least twice in a text to be counted.
+
+    test_method_bi  = ["Raw frequency", bi_meassures["Raw frequency"]]
+    test_method_tri  = ["Raw frequency", tri_meassures["Raw frequency"]]
+
+
+    global settings
+    settings = {'FunctionWordFrequency' : True,
+        'BigramFrequency' : True,
+        'TrigramFrequency' : False,
+        'AverageWordLength' : True,
+        'AverageSentenceLength' : True,
+        'LexicalDiversity' : True}
+
+    authors = getAuthors()
+    essay_vectors = {}
+    for author, data in authors.iteritems():
+        essay_vectors[author] = {}
+        for file in data:
+            # convert all items to float, because PCA library does not
+            # like the decimal.Decimal type
+            vector = [float(i) for i in getAttributeVector(file[1])]
+            essay_vectors[author][file[0]]=vector
+        
+    if unknown:
+        vector = [float(i) for i in getAttributeVector(unknown)]
+        essay_vectors["unknown"] = {}
+        essay_vectors["unknown"]["unknown"] = vector
+        
+    return essay_vectors
+
+#if __name__ == '__main__':
+    #main(sys.exit(main(sys.argv)))    
     
 def corpusStuff(init = False):
     #change this for loading another training corpus:
@@ -717,4 +813,10 @@ def corpusStuff(init = False):
     corpus_fword_frequency = corpus_stats.getRelativeFunctionWordFrequency()
     corpus_bigram_frequency = corpus_stats.getBigramFrequency(test_method_bi)
     
-main()
+#main()
+
+def getBestModel(authorPath):
+    modes = [Mode.AverageSentenceLength, Mode.AverageWordLength, Mode.BigramFrequency, Mode.FunctionWordFrequency, Mode.LexicalDiversity, Mode.TrigramFrequency]
+
+if __name__ == '__main__':
+    main()

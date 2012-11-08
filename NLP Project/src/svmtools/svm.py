@@ -12,6 +12,8 @@ if 8 * struct.calcsize("P") == 64:
 else:
         libFile = 'libsvmX32'
         
+print "libFile: " + libFile
+
 # For unix the prefix 'lib' is not considered.
 if find_library('svm'):
 	libsvm = CDLL(find_library('svm'))
@@ -21,9 +23,13 @@ elif find_library(libFile):
         libsvm = CDLL(find_library(libFile))
 else:
 	if sys.platform == 'win32':
+                if os.path.basename(os.getcwd()) != "svmtools":
+                    libsvm = CDLL("svmtools/" + libFile + '.dll')
+		else:
+                    libsvm = CDLL(libFile + '.dll')
+            
 		#libsvm = CDLL(os.path.join(os.path.dirname(__file__),\
 		#		'../windows/libsvm.dll'))
-		libsvm = CDLL(libFile + '.dll')
 	else:
 		libsvm = CDLL(os.path.join(os.path.dirname(__file__),\
 				'../libsvm.so.2'))
