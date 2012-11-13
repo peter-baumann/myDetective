@@ -12,7 +12,11 @@ class PCAPlot():
         self.essay_names = []
         i=-1
 
-        self.essay_vectors = Main.get_essay_vectors(unknown)
+        # Checks if supplied data is a dict
+        if isinstance(unknown, dict):
+            self.essay_vectors = unknown
+        else:
+            self.essay_vectors = Main.get_essay_vectors(unknown)
 
         for author, data in self.essay_vectors.iteritems():
             i += 1
