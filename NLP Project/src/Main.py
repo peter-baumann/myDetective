@@ -6,7 +6,7 @@ Created on 27.09.2012
 import operator
 import itertools
 print "loading libraries...",
-import sys, nltk, os, Data, string, re, math, collections, urllib2
+import sys, nltk, os, Data, string, re, math, collections, urllib2, time, shutil
 from fwords import fwords
 from database import database #@UnresolvedImport
 from decimal import *
@@ -62,19 +62,25 @@ opener.addheaders = [('User-agent', 'Mozilla/5.0')]
 word_list = []
 spellVector = []
 pos_vector = []
+author_limit = []
+
 
 #cache for batch - if same feature several times calculated, this will be used to save cpu time
 feature_cache = {}
 enable_caching = t
+bigram_cache = {}
+trigram_cache = {}
 ##################
 
 def main(args = None):
+    '''just the main function'''
     global training_mode, test_method_bi, test_method_tri
-    batchTest()
+    if (args != None):
+        batchTest()
     
 def batchTest():
     '''This function allows testing of all possible combinations of features using cross validation and is meant to be used by researchers'''
-    global t, f, bi_filter, tri_filter, spell_filter, settings, test_method_bi, test_method_tri, enable_caching
+    global t, f, bi_filter, tri_filter, spell_filter, settings, test_method_bi, test_method_tri, enable_caching, author_limit
     output = "cross.lsvm"
     authors = getAuthors('../crosstesting/')
     
@@ -83,71 +89,49 @@ def batchTest():
     print "--This test can take many hours - depending on your CPU and number of documents-"
     print "--------------------------------------------------------------------------------\n"
     print "Testing with: " + str(len(authors)) + " authors and a total of " + str(sum([len(authors[x]) for x in authors])) + " documents\n\n"
-        
     
+        #authors = author_limit
+    #for i in [5, 15, 30, 50, 75, 100]:
+        #author_limit = authors[:i]
+    print str(len(author_limit)) + " authors:"
+    crosstesting(output)
+    #author_limit = authors
+    
+    mostWritten()
     print "1) Single Feature Statistics:"
-#    print "   [a] Average Word Length:"
-#    cset(f,f,f,t)
-#    crosstesting(output)
-#    
-#    print "   [b] Average Sentence Length:"
-#    cset(f,f,f,f,t)
-#    crosstesting(output)
-#      
-#    print "   [c] Lexical Diversity:"
-#    cset(f,f,f,f,f,t)
-#    crosstesting(output)
-#    
-#    print "   [d] spelling mistakes with frequency filter:"
-#    cset(f,f,f,f,f,f,t)
-#    for i in range(1, 5):
-#        print "freq: >=" + str(i) + ":"
-#        spell_filter = i
-#        crosstesting(output)
-#    
-#    print "   [e] Function Word Frequency:"
-#    print "       1. Simple Frequency Statistics:"
-#    cset(t)
-#    crosstesting(output)    
-#    
-#    print "       2. Bigram Frequency Statistics using different association measures and frequency filters:"
-#    cset(f,t)
-#    for mes in bi_meassures:
-#        for i in range(1, 5):
-#            bi_filter = i
-#            test_method_bi[0] = mes
-#            test_method_bi[1] = bi_meassures[mes]
-#            print "          " + mes + " with frequency filter = " + str(i) + ":"
-#            crosstesting(output)
-#        bi_filter = -1 # this tells the function to use adaptive one
-#        test_method_bi[0] = mes
-#        test_method_bi[1] = bi_meassures[mes]
-#        print "          " + mes + " with adaptive frequency filter based on text length:"
-#        crosstesting(output)
-#        
-#    print "       3. Trigram Frequency Statistics using different association measures and frequency filters:"
-#    cset(f,f,t)
-#    for mes in tri_meassures:
-#        for i in range(1, 5):
-#            tri_filter = i
-#            test_method_tri[0] = mes
-#            test_method_tri[1] = tri_meassures[mes]
-#            print "          " + mes + " with frequency filter = " + str(i) + ":"
-#            crosstesting(output)
-#        tri_filter = -1 # this tells the function to use adaptive one
-#        test_method_tri[0] = mes
-#        test_method_tri[1] = tri_meassures[mes]
-#        print "          " + mes + " with adaptive frequency filter based on text length:"
-#        crosstesting(output)
+    print "   [a] Average Word Length:"
+    cset(f,f,f,t)
+    crosstesting(output)
     
-    print "   [f] Part of Speech:"
-    print "       1. Simple Frequency Statistics:"
-    cset(f,f,f,f,f,f,f,f,t)
+    print "   [b] Average Sentence Length:"
+    cset(f,f,f,f,t)
+    crosstesting(output)
+      
+    print "   [c] Lexical Diversity:"
+    cset(f,f,f,f,f,t)
+    crosstesting(output)
+    
+    
+    print "   [d] Punctuation Frequency:"
+    cset(f,f,f,f,f,f,f,t)
     crosstesting(output)
     
     enable_caching = f
+    print "   [d] spelling mistakes with frequency filter:"
+    cset(f,f,f,f,f,f,t)
+    for i in range(1, 5):
+        print "freq: >=" + str(i) + ":"
+        spell_filter = i
+        crosstesting(output)    
+    
+    print "   [e] Function Word Frequency:"
+    print "       1. Simple Frequency Statistics:"
+    cset(t)
+    crosstesting(output)
+        
+    
     print "       2. Bigram Frequency Statistics using different association measures and frequency filters:"
-    cset(f,f,f,f,f,f,f,f,f,t)
+    cset(f,t)
     for mes in bi_meassures:
         for i in range(1, 5):
             bi_filter = i
@@ -160,10 +144,9 @@ def batchTest():
         test_method_bi[1] = bi_meassures[mes]
         print "          " + mes + " with adaptive frequency filter based on text length:"
         crosstesting(output)
-    
-    enable_caching = f
+        
     print "       3. Trigram Frequency Statistics using different association measures and frequency filters:"
-    cset(f,f,f,f,f,f,f,f,f,f,t)
+    cset(f,f,t)
     for mes in tri_meassures:
         for i in range(1, 5):
             tri_filter = i
@@ -176,27 +159,75 @@ def batchTest():
         test_method_tri[1] = tri_meassures[mes]
         print "          " + mes + " with adaptive frequency filter based on text length:"
         crosstesting(output)
-        
+    
+    print "   [f] Part of Speech:"
+    print "       1. Simple Frequency Statistics:"
+    cset(f,f,f,f,f,f,f,f,t)
+    crosstesting(output)
+    
+
     enable_caching = t
-#    print "2) Combined Feature Statistics:"
-#    
-#    #using best results from previous test runs
-#    bi_filter =  -1
-#    tri_filter = 1
-#    test_method_bi  = ["Raw frequency", bi_meassures["Raw frequency"]]
-#    test_method_tri = ["Pointwise mutual information",tri_meassures["Pointwise mutual information"]]
-#    ###########################################
-#
-#    for i in range(2, len(settings.keys()) + 1):
-#        print "   combinations of " + str(i) + " features:"
-#        for x in itertools.combinations(settings.keys(), i):
-#            print " - ".join(x) + ":"
-#            cset()
-#            for key in x:
-#                settings[key] = t
-#            crosstesting(output)    
+    print "       2. Bigram Frequency Statistics using different association measures and frequency filters:"
+    cset(f,f,f,f,f,f,f,f,f,t)
+    for mes in bi_meassures:
+        for i in range(1, 5):
+            t0 = time.time()
+            bi_filter = i
+            test_method_bi[0] = mes
+            test_method_bi[1] = bi_meassures[mes]
+            print "          " + mes + " with frequency filter = " + str(i) + ":"
+            crosstesting(output)
+            print "processing time: " + str(time.time() - t0) + " seconds"
+        t0 = time.time()
+        bi_filter = -1 # this tells the function to use adaptive one
+        test_method_bi[0] = mes
+        test_method_bi[1] = bi_meassures[mes]
+        print "          " + mes + " with adaptive frequency filter based on text length:"
+        crosstesting(output)
+        print "processing time: " + str(time.time() - t0) + " seconds"
+    
+    enable_caching = t
+    print "       3. Trigram Frequency Statistics using different association measures and frequency filters:"
+    cset(f,f,f,f,f,f,f,f,f,f,t)
+    for mes in tri_meassures:
+        for i in range(1, 5):
+            t0 = time.time()
+            tri_filter = i
+            test_method_tri[0] = mes
+            test_method_tri[1] = tri_meassures[mes]
+            print "          " + mes + " with frequency filter = " + str(i) + ":"
+            crosstesting(output)
+            print "processing time: " + str(time.time() - t0) + " seconds"
+        t0 = time.time()
+        tri_filter = -1 # this tells the function to use adaptive one
+        test_method_tri[0] = mes
+        test_method_tri[1] = tri_meassures[mes]
+        print "          " + mes + " with adaptive frequency filter based on text length:"
+        crosstesting(output)
+        print "processing time: " + str(time.time() - t0) + " seconds"
+      
+  
+    enable_caching = t
+    print "2) Combined Feature Statistics:"
+    
+    #using best results from previous test runs
+    bi_filter =  -1
+    tri_filter = 1
+    test_method_bi  = ["Raw frequency", bi_meassures["Raw frequency"]]
+    test_method_tri = ["Pointwise mutual information",tri_meassures["Pointwise mutual information"]]
+    ###########################################
+
+    for i in range(2, len(settings.keys()) + 1):
+        print "   combinations of " + str(i) + " features:"
+        for x in itertools.combinations(settings.keys(), i):
+            print " - ".join(x) + ":"
+            cset()
+            for key in x:
+                settings[key] = t
+            crosstesting(output)    
 
 def posUnigram(sentences):
+    '''returns frequencies about part of speech tags'''
     global pos_vector
     tags = partOfSpeechVector(sentences)
     tags = filter (lambda a: a != "EOS" and a != "SOS", tags)
@@ -216,13 +247,16 @@ def posUnigram(sentences):
     return return_vector
         
     
-def posBigram(sentences):
-    return BigramFrequencyToUnifiedVector(BigramFrequency(partOfSpeechVector(sentences), test_method_bi[1], True))
+def posBigram(sentences, file_name = ""):
+    '''returns frequencies about part of speech tag bigrams'''
+    return BigramFrequencyToUnifiedVector(BigramFrequency(partOfSpeechVector(sentences), test_method_bi[1], True, file_name))
 
-def posTrigram(sentences):
-    return TrigramFrequencyToUnifiedVector(TrigramFrequency(partOfSpeechVector(sentences), test_method_tri[1], True))
+def posTrigram(sentences, file_name = ""):
+    '''returns frequencies about part of speech tag trigrams'''
+    return TrigramFrequencyToUnifiedVector(TrigramFrequency(partOfSpeechVector(sentences), test_method_tri[1], True, file_name))
 
 def partOfSpeechVector(sentences):
+    '''Creates a list of pos tags of given sentences'''
     tagged = nltk.batch_pos_tag(sentences)
     tags = []
     for sentence in tagged:
@@ -237,6 +271,7 @@ def partOfSpeechVector(sentences):
     return tags
 
 def spellingVector(words):
+    '''creates the feature vector of spelling mistakes for libsvm'''
     global spellVector, spell_filter
     tokens = [w for w in words if isMissSpelled(w)]
     types = set(tokens)
@@ -263,6 +298,7 @@ def spellingVector(words):
     
 
 def getWikipediaInformation(word):
+    '''lookups a word in wikipedia. If already looked up before, use cached values from database'''
     inf = db.getSpelling(word)
     if inf == None:
         try:
@@ -286,6 +322,7 @@ def getWikipediaInformation(word):
 
 def missSpelledFunctionWord(word):
     #adaptive word distance limit depending on length of word
+    '''Decides if a word may be misspelled using wordnet'''
     if (len(word) > 1 and 
         len(set(word) & set(string.letters)) > 0 and 
         wn.morphy(word) == None and                     #@UndefinedVariable
@@ -302,63 +339,37 @@ def missSpelledFunctionWord(word):
         
 
 def isMissSpelled(word):
-        try:
-            if (len(word) > 1 and 
-                len(set(word) & set(string.letters)) > 0 and 
-                wn.morphy(word) == None and                     #@UndefinedVariable
-                len(wn.synsets(word)) == 0 and                  #@UndefinedVariable
-                not fwords.isFunctionWord(word) and
-                len(word.split("-")) == 1):
-                
-                word_data = getWikipediaInformation(word)
-                if word_data == None:
-                    return False
-                hits = int(word_data[1])
-                suggestion = word_data[2]
-                distance = int(word_data[3])
+    '''decides whether a word is misspelled or not, based on wikipedia information'''
+    try:
+        if (len(word) > 1 and 
+            len(set(word) & set(string.letters)) > 0 and 
+            wn.morphy(word) == None and                     #@UndefinedVariable
+            len(wn.synsets(word)) == 0 and                  #@UndefinedVariable
+            not fwords.isFunctionWord(word) and
+            len(word.split("-")) == 1):
+            
+            word_data = getWikipediaInformation(word)
+            if word_data == None:
+                return False
+            hits = int(word_data[1])
+            suggestion = word_data[2]
+            distance = int(word_data[3])
 
-                if suggestion != "":
+            if suggestion != "":
+                return True
+            else:
+                if distToFuncWords(word) < 3:
                     return True
                 else:
-                    if distToFuncWords(word) < 3:
-                        return True
-                    else:
-#                        if hits < 10:
-#                            return True
-#                        else:
-                        return False
-                        
-                        
-#                if hits == 0:
-#                    if suggestion != "":
-#                        #assume no spelling error - probably some proper name which is not very common
-#                        return False
-                
-#                if hits < 10:
-#                    if suggestion != "":
-#                        if distance < 4:
-#                            return True
-#                        else:
-#                            return False
-#                    else:
-#                        if distToFuncWords(word) < 3:
-#                            return True
-#                        else:
-#                            return False
-#                else:
-#                    return False
-                    
-            else:
-                return False
-        except:
+                    return False                    
+        else:
             return False
+    except:
+        return False
 
 def distToFuncWords(word):
     '''returns a words smallest levenshtein distance to words in a set of function words'''
     return min([nltk.distance.edit_distance(word, fw) for fw in fwords().getWords()])
-
-
-        
 
 
 def cset(FunctionWordFrequency = False, BigramFrequency = False, 
@@ -367,7 +378,7 @@ def cset(FunctionWordFrequency = False, BigramFrequency = False,
          spellingMistakes = False, punctuation = False,
          partOfSpeechUnigram = False, PartOfSpeechBigram = False,
          PartOfSpeechTrigram = False):
-    '''change settings'''
+    '''change settings for which features to be selected for authorship attribution'''
     global settings
     settings['FunctionWordFrequency'] = FunctionWordFrequency
     settings['BigramFrequency'] = BigramFrequency
@@ -382,6 +393,7 @@ def cset(FunctionWordFrequency = False, BigramFrequency = False,
     settings['PartOfSpeechTrigram'] = PartOfSpeechTrigram
 
 def crosstesting(filen):
+    '''crosstesting a set of documents'''
     global bigramIndices, trigramIndices
     bigramIndices = []
     trigramIndices = []
@@ -389,16 +401,19 @@ def crosstesting(filen):
     svm(filen)
     
 def training(filen):
+    '''training some documents'''
     processAuthorFolder('../training/', filen)
     svm(filen)
 
 def testing(filen):
+    '''testing some documents'''
     global training_mode
     training_mode = False
     processAuthorFolder('../testing/', filen)
     svm(filen)
 
 def svm(train, test = None):
+    '''Executes libsvm'''
     if (test != None):
         cmd = './svmtools/easy.py "{0}" "{1}"'.format(train, test)
         output = Popen(cmd, shell = True, stdout = PIPE, stderr = None)
@@ -416,12 +431,9 @@ def svm(train, test = None):
         if m:
             print "------> " + m.group(1) + "%"
 
-def testDocument():
-    pass
-
 def processAuthorFolder(input_folder, output_file):
-    wfile = open(output_file, "w");
-    
+    '''Writes all feature vectors of each text from each author into a .lsvm file'''
+    wfile = open(output_file, "w");    
     authors = getAuthors(input_folder)
     author_id = 0
     for author in authors:
@@ -430,7 +442,8 @@ def processAuthorFolder(input_folder, output_file):
             wfile.write(listToSVMVector(author_id, getAttributeVector(file_[1])))
     wfile.close()
     
-def extractVectors(input_folder):    
+def extractVectors(input_folder):
+    '''unknown functionality. not used. to be deleted'''   
     authors = getAuthors(input_folder)
     author_id = 0
     labels = []
@@ -442,7 +455,6 @@ def extractVectors(input_folder):
         for file_ in authors[author]:
             labels.append(author_id)
             values.append(getAttributeVector(file_[1]))
-
     return labels, values, author_list
 
 def setMode(mode):
@@ -479,6 +491,7 @@ def setMode(mode):
     
 def getAuthors(path = '../training/'):
     """returns a list of authors with corresponding files."""
+    global author_limit
     authors = collections.OrderedDict()
     author_listing = os.listdir(path)
     for author in author_listing:
@@ -488,15 +501,27 @@ def getAuthors(path = '../training/'):
             file_listing = os.listdir(author_path)
             file_listing = [[file_, author_path + file_] for file_ in file_listing]
             if len(file_listing) > 0:
-                authors.update({author:file_listing})
+                if author_limit == []:
+                    authors.update({author:file_listing})
+                else:
+                    if author in author_limit:
+                        authors.update({author:file_listing})
     return authors
-    
-def getAttributeVector(file_name):
-    global bigramIndices, training_mode, settings, feature_cache, enable_caching
+
+def getTextAttributes(file_name):
+    '''function to retrieve the text, sentences and words. Check if text loaded already before calling this function to save performance'''
     text = Data.Data(file_name).text.lower()
     sentences = nltk.sent_tokenize(text)
     pattern = re.compile('[\.\'\/]+')
     words = [pattern.sub('', x) for x in nltk.word_tokenize(text) if x not in string.punctuation and re.search("[0-9]", x) == None and x != "``" and x != "''"]
+    return {"text": text, "sentences": sentences, "words": words}
+
+def getAttributeVector(file_name):
+    '''returns a Vector of the values of all enabled features. Several feature combinations are possible. Use cset for defining which'''
+    global bigramIndices, training_mode, settings, feature_cache, enable_caching, t0
+    text = ""
+    words = []
+    sentences = []
     
     #punctuation
     if settings['punctuation']:
@@ -504,9 +529,19 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('punctuation'):
                 punctuation = feature_cache[file_name]['punctuation']
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 punctuation = punctuationVector(text) 
                 feature_cache[file_name].update({'punctuation' : punctuation})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             punctuation = punctuationVector(text) 
             feature_cache.update({file_name:{'punctuation' : punctuation}})
     else: 
@@ -518,9 +553,19 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('spellingMistakes'):
                 spelling = feature_cache[file_name]['spellingMistakes']
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 spelling = spellingVector(words)
                 feature_cache[file_name].update({'spellingMistakes' : spelling})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             spelling = spellingVector(words)
             feature_cache.update({file_name:{'spellingMistakes' : spelling}})
     else: 
@@ -532,9 +577,19 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('LexicalDiversity'):
                 diversity = feature_cache[file_name]['LexicalDiversity']
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 diversity = [len(words) / float(len(set(words)))]
                 feature_cache[file_name].update({'LexicalDiversity' : diversity})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             diversity = [len(words) / float(len(set(words)))]
             feature_cache.update({file_name:{'LexicalDiversity' : diversity}})
     else: 
@@ -546,10 +601,20 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('FunctionWordFrequency'):
                 fword_frequency = feature_cache[file_name]['FunctionWordFrequency']
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 fwords = fwordFrequency(words, len(words))
                 fword_frequency = [fwords[f] for f in fwords]
                 feature_cache[file_name].update({'FunctionWordFrequency' : fword_frequency})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             fwords = fwordFrequency(words, len(words))
             fword_frequency = [fwords[f] for f in fwords]
             feature_cache.update({file_name:{'FunctionWordFrequency' : fword_frequency}})
@@ -562,9 +627,19 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('AverageWordLength'):
                 avg_word = feature_cache[file_name]['AverageWordLength']
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 avg_word = [average_word_length(words)]
                 feature_cache[file_name].update({'AverageWordLength' : avg_word})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             avg_word = [average_word_length(words)]
             feature_cache.update({file_name:{'AverageWordLength' : avg_word}})
     else: 
@@ -576,39 +651,69 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('AverageSentenceLength'):
                 avg_sent = feature_cache[file_name]['AverageSentenceLength']
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 avg_sent = [average_sentence_length(sentences)]
                 feature_cache[file_name].update({'AverageSentenceLength' : avg_sent})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             avg_sent = [average_sentence_length(sentences)]
             feature_cache.update({file_name:{'AverageSentenceLength' : avg_sent}})
     else: 
         avg_sent = []
-    
+        
     #Function Word Bigram Frequency
     if settings['BigramFrequency']:
         if enable_caching and feature_cache.has_key(file_name):
             if feature_cache[file_name].has_key('BigramFrequency'):
-                bigram_frequency = feature_cache[file_name]['BigramFrequency']
+                if feature_cache[file_name]['BigramFrequency'].has_key(test_method_bi[0]):
+                    if feature_cache[file_name]['BigramFrequency'][test_method_bi[0]].has_key(str(bi_filter)):
+                        bigram_frequency = BigramFrequencyToUnifiedVector(feature_cache[file_name]['BigramFrequency'][test_method_bi[0]][str(bi_filter)])
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 bigram_frequency = BigramFrequencyToUnifiedVector(BigramFrequency(words, test_method_bi[1]))
-                feature_cache[file_name].update({'BigramFrequency' : bigram_frequency})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             bigram_frequency = BigramFrequencyToUnifiedVector(BigramFrequency(words, test_method_bi[1]))
-            feature_cache.update({file_name:{'BigramFrequency' : bigram_frequency}})
     else: 
         bigram_frequency = []
     
-    #Trigram frequencies
+    #Function Word Trigram frequencies
     if settings['TrigramFrequency']:
         if enable_caching and feature_cache.has_key(file_name):
             if feature_cache[file_name].has_key('TrigramFrequency'):
-                trigram_frequency = feature_cache[file_name]['TrigramFrequency']
+                if feature_cache[file_name]['TrigramFrequency'].has_key(test_method_tri[0]):
+                    if feature_cache[file_name]['TrigramFrequency'][test_method_tri[0]].has_key(str(tri_filter)):
+                            trigram_frequency = TrigramFrequencyToUnifiedVector(feature_cache[file_name]['TrigramFrequency'][test_method_tri[0]][str(tri_filter)])
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 trigram_frequency = TrigramFrequencyToUnifiedVector(TrigramFrequency(words, test_method_tri[1]))
-                feature_cache[file_name].update({'TrigramFrequency' : trigram_frequency})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             trigram_frequency = TrigramFrequencyToUnifiedVector(TrigramFrequency(words, test_method_tri[1]))
-            feature_cache.update({file_name:{'TrigramFrequency' : trigram_frequency}})
     else: 
         trigram_frequency = []
     
@@ -618,9 +723,19 @@ def getAttributeVector(file_name):
             if feature_cache[file_name].has_key('PartOfSpeechUnigram'):
                 part_of_speech_unigram = feature_cache[file_name]['PartOfSpeechUnigram']
             else:
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
                 part_of_speech_unigram = posUnigram([nltk.word_tokenize(snt) for snt in sentences])
                 feature_cache[file_name].update({'PartOfSpeechUnigram' : part_of_speech_unigram})
         else:
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
             part_of_speech_unigram = posUnigram([nltk.word_tokenize(snt) for snt in sentences])
             feature_cache.update({file_name:{'PartOfSpeechUnigram' : part_of_speech_unigram}})
     else: 
@@ -630,13 +745,23 @@ def getAttributeVector(file_name):
     if settings['PartOfSpeechBigram']:
         if enable_caching and feature_cache.has_key(file_name):
             if feature_cache[file_name].has_key('PartOfSpeechBigram'):
-                part_of_speech_bigram = feature_cache[file_name]['PartOfSpeechBigram']
+                if feature_cache[file_name]['PartOfSpeechBigram'].has_key(test_method_bi[0]):
+                    if feature_cache[file_name]['PartOfSpeechBigram'][test_method_bi[0]].has_key(str(bi_filter)):
+                        part_of_speech_bigram = BigramFrequencyToUnifiedVector(feature_cache[file_name]['PartOfSpeechBigram'][test_method_bi[0]][str(bi_filter)])
             else:
-                part_of_speech_bigram = posBigram([nltk.word_tokenize(snt) for snt in sentences])
-                feature_cache[file_name].update({'PartOfSpeechBigram' : part_of_speech_bigram})
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
+                part_of_speech_bigram = posBigram([nltk.word_tokenize(snt) for snt in sentences], file_name)
         else:
-            part_of_speech_bigram = posBigram([nltk.word_tokenize(snt) for snt in sentences])
-            feature_cache.update({file_name:{'PartOfSpeechBigram' : part_of_speech_bigram}})
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
+            part_of_speech_bigram = posBigram([nltk.word_tokenize(snt) for snt in sentences], file_name)
     else: 
         part_of_speech_bigram = []
     
@@ -644,33 +769,44 @@ def getAttributeVector(file_name):
     if settings['PartOfSpeechTrigram']:
         if enable_caching and feature_cache.has_key(file_name):
             if feature_cache[file_name].has_key('PartOfSpeechTrigram'):
-                part_of_speech_trigram = feature_cache[file_name]['PartOfSpeechTrigram']
+                if feature_cache[file_name]['PartOfSpeechTrigram'].has_key(test_method_tri[0]):
+                    if feature_cache[file_name]['PartOfSpeechTrigram'][test_method_tri[0]].has_key(str(tri_filter)):
+                        part_of_speech_trigram = TrigramFrequencyToUnifiedVector(feature_cache[file_name]['PartOfSpeechTrigram'][test_method_tri[0]][str(tri_filter)])
             else:
-                part_of_speech_trigram = posTrigram([nltk.word_tokenize(snt) for snt in sentences])
-                feature_cache[file_name].update({'PartOfSpeechTrigram' : part_of_speech_trigram})
+                if text == "":
+                    temp = getTextAttributes(file_name)
+                    text = temp["text"]
+                    words = temp["words"]
+                    sentences = temp["sentences"]
+                part_of_speech_trigram = posTrigram([nltk.word_tokenize(snt) for snt in sentences], file_name)
         else:
-            part_of_speech_trigram = posTrigram([nltk.word_tokenize(snt) for snt in sentences])
-            feature_cache.update({file_name:{'PartOfSpeechTrigram' : part_of_speech_trigram}})
+            if text == "":
+                temp = getTextAttributes(file_name)
+                text = temp["text"]
+                words = temp["words"]
+                sentences = temp["sentences"]
+            part_of_speech_trigram = posTrigram([nltk.word_tokenize(snt) for snt in sentences], file_name)
     else: 
         part_of_speech_trigram = []
     
     #returning combined vector of all features that have been selected.
     return (diversity + fword_frequency + avg_word + avg_sent + bigram_frequency + trigram_frequency + 
-            spelling + part_of_speech_unigram + part_of_speech_bigram + part_of_speech_trigram)
+            spelling + part_of_speech_unigram + part_of_speech_bigram + part_of_speech_trigram + punctuation)
 
 def bigramsToStringVector(bigrams):
+    '''combines the 2 tokens of a bigram to one single string to use in a dictionary'''
     return {b[0][0] + "_" + b[0][1] : b[1] for b in bigrams}
 
 def trigramsToStringVector(bigrams):
+    '''combines the 3 tokens of a trigram to one single string to use in a dictionary'''
     return {b[0][0] + "_" + b[0][1] + "_" + b[0][2] : b[1] for b in bigrams}
 
 def listToSVMVector(ida, listl):
-    """ Transforms dictionary to libsvm readable date """
+    """ Transforms dictionary to libsvm readable data """
     out = str(ida)
     for idx, val in enumerate(listl):
         if str(val) != "0": 
             out += " " + str(idx) + ":" + str(val)
-    #print out
     out += "\n"
     return out
     
@@ -702,24 +838,44 @@ def average_sentence_length(sentences):
     return length_total/float(len(sentences))
     
 def fwordFrequency(words, token_count):
+    '''retrieve relative function word frequencies'''
     text_fwords = fwords()
     return text_fwords.relativeFrequencyWordArray(words, token_count)
 
-def BigramFrequency(words, test_method, pos = False):
-    global bi_filter
+def BigramFrequency(words, test_method, pos = False, file_name = ""):
+    '''returns the meassured bigram frequencies for a file'''
+    global bi_filter, feature_cache
+    index = 'PartOfSpeechBigram' if pos else 'BigramFrequency'
     return_array = []
     finder = BigramCollocationFinder.from_words(words)
-    if bi_filter != -1:
-        finder.apply_freq_filter(bi_filter)
-    else:
-        finder.apply_freq_filter(math.ceil(math.log(len(words) - 1) /3) - 1) #@UndefinedVariable
-    scored = finder.score_ngrams(test_method)
-    for score in scored:
-        if(fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1])) or pos:
-            return_array.append(score)
-    return return_array
+    
+    if not feature_cache.has_key(file_name):
+        feature_cache[file_name] = {}
+    if not feature_cache[file_name].has_key(index):
+        feature_cache[file_name][index] = {}
+            
+    key = ""
+    
+    for i in range(1, 5):
+        for mes in bi_meassures:
+            temp_array = []
+            if bi_meassures[mes] == test_method:
+                key = mes
+            if not feature_cache[file_name][index].has_key(mes):
+                feature_cache[file_name][index][mes] = {}
+            finder.apply_freq_filter(i)
+            scored = finder.score_ngrams(bi_meassures[mes])
+            for score in scored:
+                if pos or (fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1])):
+                    temp_array.append(score)
+            feature_cache[file_name][index][mes][str(i)] = temp_array
+            if (math.ceil(math.log(len(words) - 1) /3) - 1) == i: #@UndefinedVariable
+                feature_cache[file_name][index][mes]["-1"] = temp_array
+
+    return feature_cache[file_name][index][key][str(bi_filter)]
 
 def BigramFrequencyToUnifiedVector(bg_freq):
+    '''Takes a list of bigram frequencies and returns a vector for libsvm'''
     global bigramIndices, training_mode
     bigram_frequency = bigramsToStringVector(bg_freq)
     bigram_vector = []    
@@ -746,22 +902,41 @@ def BigramFrequencyToUnifiedVector(bg_freq):
             else:
                 pass
     return [b[1] for b in bigram_vector]
-    
-def TrigramFrequency(words, test_method, pos = False):
-    global tri_filter
+
+def TrigramFrequency(words, test_method, pos = False, file_name = ""):
+    '''returns the meassured trigram frequencies for a file'''
+    global tri_filter, feature_cache
+    index = 'PartOfSpeechTrigram' if pos else 'TrigramFrequency'
     return_array = []
     finder = TrigramCollocationFinder.from_words(words)
-    if tri_filter != -1:
-        finder.apply_freq_filter(tri_filter)
-    else:
-        finder.apply_freq_filter(math.ceil(math.log(len(words) - 1) /3) - 1) #@UndefinedVariable
-    scored = finder.score_ngrams(test_method)
-    for score in scored:
-        if(not pos and fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1]) and fwords.isFunctionWord(score[0][2])):
-            return_array.append(score)
-    return return_array
+    
+    if not feature_cache.has_key(file_name):
+        feature_cache[file_name] = {}
+    if not feature_cache[file_name].has_key(index):
+        feature_cache[file_name][index] = {}
+            
+    key = ""    
+    for i in range(1, 5):
+        for mes in tri_meassures:
+            temp_array = []
+            if tri_meassures[mes] == test_method:
+                key = mes
+            if not feature_cache[file_name][index].has_key(mes):
+                feature_cache[file_name][index][mes] = {}
+            finder.apply_freq_filter(i)
+            scored = finder.score_ngrams(tri_meassures[mes])
+            for score in scored:
+                if pos or (fwords.isFunctionWord(score[0][0]) and fwords.isFunctionWord(score[0][1])):
+                    temp_array.append(score)
+            feature_cache[file_name][index][mes][str(i)] = temp_array
+            if (math.ceil(math.log(len(words) - 1) /3) - 1) == i: #@UndefinedVariable
+                feature_cache[file_name][index][mes]["-1"] = temp_array
+
+    return feature_cache[file_name][index][key][str(tri_filter)]
+
 
 def TrigramFrequencyToUnifiedVector(bg_freq):
+    '''Takes a list of trigram frequencies and returns a vector for libsvm'''
     global trigramIndices, training_mode
     trigram_frequency = trigramsToStringVector(bg_freq)
     trigram_vector = []    
@@ -791,19 +966,20 @@ def TrigramFrequencyToUnifiedVector(bg_freq):
 
 def punctuationVector(text):
     '''returns a vector with punctuation statistics from a text'''
-    size = len(text)
-    return [Decimal(text.count(".")) / Decimal(size), 
-            Decimal(text.count(",")) / Decimal(size), 
-            Decimal(text.count("?")) / Decimal(size), 
-            Decimal(text.count("!")) / Decimal(size), 
-            Decimal(text.count(":")) / Decimal(size), 
-            Decimal(text.count(";")) / Decimal(size),
-            Decimal(text.count("-")) / Decimal(size)]
-    pass
+    allc = len(text)
+    return [Decimal(text.count(".")) / Decimal(allc), 
+            Decimal(text.count(",")) / Decimal(allc), 
+            Decimal(text.count("?")) / Decimal(allc), 
+            Decimal(text.count("!")) / Decimal(allc), 
+            Decimal(text.count(":")) / Decimal(allc), 
+            Decimal(text.count(";")) / Decimal(allc), 
+            Decimal(text.count("-")) / Decimal(allc)]
 
 
 #just a helper function for finding the students with the most text data
 def mostWritten():
+    '''retrieves the authors, that wrote the most. Used for Corpus creation.'''
+    global author_limit
     authors = {}
     files = os.listdir("../CORPUS_TXT/")
     for filed in files:
@@ -817,10 +993,27 @@ def mostWritten():
                 authors.update({author:[size, 1]})
                 
     authors2 = sorted(authors.items(), key=operator.itemgetter(1), reverse=True)
-    print authors2
-    authors = sorted(authors.items(), key=lambda (k, v): operator.itemgetter(1)(v), reverse=True)
-    print authors
-
+    author_limit =  [x[0] for x in authors2]
+    
+    
+def createAuthorsFromCorpus():
+    '''Function that creates a structure of authors from the BAWE corpus. Used for Corpus creation'''
+    authors = {}
+    files = os.listdir("../CORPUS_TXT/")
+    for filed in files:
+        if filed[len(filed)-3:len(filed)] == "txt" and "Freq" not in filed:
+            size = os.path.getsize("../CORPUS_TXT/" + filed)
+            author = filed[0:len(filed)-5]
+            if not os.path.exists("../100s/" + author):
+                os.makedirs("../100s/" + author)
+            if author in authors:
+                authors[author][0] = authors[author][0] + size
+                authors[author][1] = authors[author][1] + 1
+            else:
+                authors.update({author:[size, 1]})
+            shutil.copy2("../CORPUS_TXT/" + filed, "../100s/" + author + "/" + filed)
+                
+    #authors2 = sorted(authors.items(), key=operator.itemgetter(1), reverse=True)
 
 def get_essay_vectors(unknown=None):
     """
@@ -865,6 +1058,7 @@ def get_essay_vectors(unknown=None):
     #main(sys.exit(main(sys.argv)))    
     
 def corpusStuff(init = False):
+    '''This function is deprecated'''
     #change this for loading another training corpus:
     corpus = LazyCorpusLoader('brown', CategorizedTaggedCorpusReader, 
                               r'c[a-z]\d\d', cat_file='cats.txt', 
@@ -876,8 +1070,6 @@ def corpusStuff(init = False):
     corpus_stats = corpusstatistics(corpus)
     corpus_fword_frequency = corpus_stats.getRelativeFunctionWordFrequency()
     corpus_bigram_frequency = corpus_stats.getBigramFrequency(test_method_bi)
-    
-#main()
 
 def getBestModel(authorPath):
     modes = [Mode.AverageSentenceLength, Mode.AverageWordLength, Mode.BigramFrequency, Mode.FunctionWordFrequency, Mode.LexicalDiversity, Mode.TrigramFrequency]

@@ -10,7 +10,7 @@ from subprocess import *
 if(sys.hexversion < 0x03000000):
 	import Queue
 else:
-	import queue as Queue
+	import queue as Queue #@UnresolvedImport
 
 
 # svmtrain and gnuplot executable
@@ -162,8 +162,7 @@ def redraw(db,best_param,tofile=False):
     gnuplot.write("set label \"Best log2(C) = {0}  log2(gamma) = {1}  accuracy = {2}%\" \
                   at screen 0.5,0.85 center\n". \
                   format(best_log2c, best_log2g, best_rate).encode())
-    gnuplot.write("set label \"C = {0}  gamma = {1}\""
-                  " at screen 0.5,0.8 center\n".format(2**best_log2c, 2**best_log2g).encode())
+    gnuplot.write("set label \"C = {0}  gamma = {1}\" at screen 0.5,0.8 center\n".format(2**best_log2c, 2**best_log2g).encode())
     gnuplot.write(b"set key at screen 0.9,0.9\n")
     gnuplot.write(b"splot \"-\" with lines\n")
     
