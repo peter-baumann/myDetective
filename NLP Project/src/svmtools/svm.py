@@ -12,7 +12,7 @@ if 8 * struct.calcsize("P") == 64:
 else:
         libFile = 'libsvmX32'
         
-print "libFile: " + libFile
+#print "libFile: " + libFile
 
 # For unix the prefix 'lib' is not considered.
 if find_library('svm'):

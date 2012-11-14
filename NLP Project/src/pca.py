@@ -1,6 +1,9 @@
 import pylab as pl
 import numpy as np
-from sklearn.decomposition import PCA
+try:
+    from sklearn.decomposition import PCA #@UnresolvedImport
+except:
+    from scikits.learn.decomposition import PCA #@UnresolvedImport
 import Main
 
 
@@ -31,9 +34,9 @@ class PCAPlot():
         for i in range(len(self.variables)):
             self.variables[i].extend([0] * (max_length - len(self.variables[i])))
 
-        X = np.array(self.variables)
-        self.y = np.array(self.authors)
-        self.target_names = np.array(self.author_names)
+        X = np.array(self.variables) #@UndefinedVariable
+        self.y = np.array(self.authors) #@UndefinedVariable
+        self.target_names = np.array(self.author_names) #@UndefinedVariable
 
         self.pca = PCA(n_components=2)
         self.X_r = self.pca.fit(X).transform(X)

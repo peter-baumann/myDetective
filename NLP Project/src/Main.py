@@ -5,7 +5,7 @@ Created on 27.09.2012
 '''
 import operator
 import itertools
-print "loading libraries...",
+#print "loading libraries...",
 import sys, nltk, os, Data, string, re, math, collections, urllib2, time, shutil
 from fwords import fwords
 from database import database #@UnresolvedImport
@@ -16,9 +16,10 @@ from nltk.corpus.reader import *
 from nltk.tag import *
 from nltk.collocations import *
 from subprocess import *
+from itertools import islice
 from nltk.corpus import wordnet as wn
+#print "- done\n"
 from svmtools.SvmInterface import *
-print "- done"
 
 f = False
 t = True
@@ -72,49 +73,262 @@ bigram_cache = {}
 trigram_cache = {}
 ##################
 
-def main(args = None):
+def main(argv = None):
     '''just the main function'''
-    global training_mode, test_method_bi, test_method_tri
-    if (args != None):
-        batchTest()
+    features = ["-fwf",  "-fwbf", "-fwtf", "-awl", "-asl", "-ld", "-spl", "-pt", "-psf", "-psbf", "-pstf"];
+    help = '''
+myDetective [v 0.8]: Available commands:
+--------------------------------------------------------------------------------
+-help: 
+show this message
+
+-authors [2 - 627]:
+Runs a crosstesting of all features over a specified amount of authors from the corpus
+
+-authors [2 - 627] [-fwf|-fwbf|-fwtf|-awl|-asl|-ld|-spl|-pt|-psf|-psbf|-pstf]:
+Runs a crosstesting of a selected feature over a specified amount of authors from the corpus:
+    -fwf:  Function-Word Frequency
+    -fwbf: Function-Word Bigram Frequency
+    -fwtf: Function-Word Trigram Frequency
+    -awl: Average Word Length
+    -asl: Average Sentence Length
+    -ld: Lexical Diversity
+    -spl: Spelling Mistakes
+    -pt: Punctuation Frequency
+    -psf: Part-Of-Speech Frequency
+    -psbf: Part-Of-Speech Bigram Frequency
+    -pstf: Part-Of-Speech Trigram Frequency
+
+-crosstest:
+crosstesting of documents in the standard folder ../crosstesting/ with all available features
+
+-crosstest [-fwf|-fwbf|-fwtf|-awl|-asl|-ld|-spl|-pt|-psf|-psbf|-pstf]:
+crosstesting of documents in the standard folder ../crosstesting/ with a selected feature:
+    -fwf:  Function-Word Frequency
+    -fwbf: Function-Word Bigram Frequency
+    -fwtf: Function-Word Trigram Frequency
+    -awl: Average Word Length
+    -asl: Average Sentence Length
+    -ld: Lexical Diversity
+    -spl: Spelling Mistakes
+    -pt: Punctuation Frequency
+    -psf: Part-Of-Speech Frequency
+    -psbf: Part-Of-Speech Bigram Frequency
+    -pstf: Part-Of-Speech Trigram Frequency
+
+-crosstest [folder]:
+crosstesting of documents with all available features. Authors have to have their own folders with their documents.
+
+-crosstest [folder] [-fwf|-fwbf|-fwtf|-awl|-asl|-ld|-spl|-pt|-psf|-psbf|-pstf]:
+Crosstesting with one of the selected features:
+    -fwf:  Function-Word Frequency
+    -fwbf: Function-Word Bigram Frequency
+    -fwtf: Function-Word Trigram Frequency
+    -awl: Average Word Length
+    -asl: Average Sentence Length
+    -ld: Lexical Diversity
+    -spl: Spelling Mistakes
+    -pt: Punctuation Frequency
+    -psf: Part-Of-Speech Frequency
+    -psbf: Part-Of-Speech Bigram Frequency
+    -pstf: Part-Of-Speech Trigram Frequency
     
-def batchTest():
+-quicktest:
+runs a crosstest on a set of 2 authors
+'''
+    
+    global training_mode, test_method_bi, test_method_tri
+    if argv is None:
+        argv = sys.argv
+        
+    if len(argv) == 1:
+        print help
+    else:
+        if len(argv) == 2:
+            if argv[1] == "-quicktest":
+                batchTest('../shorttesting/')
+            elif argv[1] == "-crosstest":
+                    batchTest()
+            else:
+                print help
+        if len(argv) == 3:
+            if argv[1] == "-authors":
+                try:
+                    nr = int(argv[2])
+                    if nr < 2:
+                        print help
+                    else:
+                        batchTest('../corpus/', nr)
+                except ValueError:
+                    print help
+            elif argv[1] == "-crosstest":
+                if argv[2] in features:
+                    singleFeature(argv[2])
+                elif argv[2][0] == "-":
+                    print help                        
+                elif os.path.isdir(argv[2]):
+                    batchTest(argv[2])
+                else:
+                    print help + "\n" + argv[2] + " this folder does not exist! Use without argument for standard folder."
+        if len(argv) == 4:
+            if argv[1] == "-authors":
+                try:
+                    nr = int(argv[2])
+                    if nr < 2:
+                        print help
+                    else:
+                        if argv[3] in features:
+                            singleFeature(argv[3], nr, '../corpus/')
+                        else:
+                            print help
+                except ValueError:
+                    print help
+            elif argv[1] == "-crosstest":
+                if os.path.isdir(argv[2]):
+                    if argv[3] in features:
+                        singleFeature(argv[3], -1, argv[2])
+            else:
+                print help
+
+def singleFeature(feature, nr = -1, path = '../crosstesting/'):
+    global t, f, bi_filter, tri_filter, spell_filter, settings, test_method_bi, test_method_tri, enable_caching, author_limit
+    authors = getAuthors(path)
+    if nr > 1:
+        #author_limit = list(islice(authors, nr))
+        mostWritten()
+        author_limit = author_limit[:nr]
+        print "Testing with: " + str(len(author_limit)) + " authors and a total of " + str(sum([len(authors[x]) for x in authors if x in author_limit])) + " documents"
+    else:
+        print "Testing with: " + str(len(authors)) + " authors and a total of " + str(sum([len(authors[x]) for x in authors])) + " documents"
+    output = "cross.lsvm"
+    if feature == "-fwf":
+        print "Function Word Frequency:"
+        cset(t)
+        crosstesting(output, path)
+    if feature == "-fwbf":
+        print "Function Word Bigram Frequency using different association measures and frequency filters:"
+        cset(f,t)
+        for mes in bi_meassures:
+            for i in range(1, 5):
+                bi_filter = i
+                test_method_bi[0] = mes
+                test_method_bi[1] = bi_meassures[mes]
+                print "  " + mes + " with frequency filter = " + str(i) + ":"
+                crosstesting(output, path)
+            bi_filter = -1 # this tells the function to use adaptive one
+            test_method_bi[0] = mes
+            test_method_bi[1] = bi_meassures[mes]
+            print "  " + mes + " with adaptive frequency filter based on text length:"
+            crosstesting(output, path)
+    if feature == "-fwtf":
+        cset(f,f,t)
+        for mes in tri_meassures:
+            for i in range(1, 5):
+                tri_filter = i
+                test_method_tri[0] = mes
+                test_method_tri[1] = tri_meassures[mes]
+                print "  " + mes + " with frequency filter = " + str(i) + ":"
+                crosstesting(output, path)
+            tri_filter = -1 # this tells the function to use adaptive one
+            test_method_tri[0] = mes
+            test_method_tri[1] = tri_meassures[mes]
+            print "  " + mes + " with adaptive frequency filter based on text length:"
+            crosstesting(output, path)
+    if feature == "-awl":
+        print "Average Word Length:"
+        cset(f,f,f,t)
+        crosstesting(output, path)
+    if feature == "-asl":
+        print "Average Sentence Length:"
+        cset(f,f,f,f,t)
+        crosstesting(output, path)
+    if feature == "-ld":
+        print "Lexical Diversity:"
+        cset(f,f,f,f,f,t)
+        crosstesting(output, path)
+    if feature == "-spl":
+        enable_caching = f
+        print "spelling mistakes with frequency filter:"
+        cset(f,f,f,f,f,f,t)
+        for i in range(1, 5):
+            print "freq: >=" + str(i) + ":"
+            spell_filter = i
+            crosstesting(output, path)   
+    if feature == "-pt":
+        print "Punctuation Frequency:"
+        cset(f,f,f,f,f,f,f,t)
+        crosstesting(output, path)
+    if feature == "-psf":
+        print "Part-of-Speech Frequency:"
+        cset(f,f,f,f,f,f,f,f,t)
+        crosstesting(output, path)
+    if feature == "-psbf":
+        cset(f,f,f,f,f,f,f,f,f,t)
+        for mes in bi_meassures:
+            for i in range(1, 5):
+                bi_filter = i
+                test_method_bi[0] = mes
+                test_method_bi[1] = bi_meassures[mes]
+                print "  " + mes + " with frequency filter = " + str(i) + ":"
+                crosstesting(output, path)
+                print "processing time: " + str(time.time() - t0) + " seconds"
+            bi_filter = -1 # this tells the function to use adaptive one
+            test_method_bi[0] = mes
+            test_method_bi[1] = bi_meassures[mes]
+            print "  " + mes + " with adaptive frequency filter based on text length:"
+            crosstesting(output, path)
+    if feature == "-pstf":
+        print "Part-of-Speech Trigram Frequency using different association measures and frequency filters:"
+        cset(f,f,f,f,f,f,f,f,f,f,t)
+        for mes in tri_meassures:
+            for i in range(1, 5):
+                tri_filter = i
+                test_method_tri[0] = mes
+                test_method_tri[1] = tri_meassures[mes]
+                print "  " + mes + " with frequency filter = " + str(i) + ":"
+                crosstesting(output, path)
+            tri_filter = -1 # this tells the function to use adaptive one
+            test_method_tri[0] = mes
+            test_method_tri[1] = tri_meassures[mes]
+            print "  " + mes + " with adaptive frequency filter based on text length:"
+            crosstesting(output, path)
+    
+def batchTest(path = '../crosstesting/', nr = -1):
     '''This function allows testing of all possible combinations of features using cross validation and is meant to be used by researchers'''
     global t, f, bi_filter, tri_filter, spell_filter, settings, test_method_bi, test_method_tri, enable_caching, author_limit
     output = "cross.lsvm"
-    authors = getAuthors('../crosstesting/')
+    authors = getAuthors(path)
     
     print "\n--------------------------------------------------------------------------------"
     print "--Batch Testing of all possible combinations of features with cross validation--"
     print "--This test can take many hours - depending on your CPU and number of documents-"
     print "--------------------------------------------------------------------------------\n"
-    print "Testing with: " + str(len(authors)) + " authors and a total of " + str(sum([len(authors[x]) for x in authors])) + " documents\n\n"
     
-        #authors = author_limit
-    #for i in [5, 15, 30, 50, 75, 100]:
-        #author_limit = authors[:i]
-    print str(len(author_limit)) + " authors:"
-    crosstesting(output)
-    #author_limit = authors
+    #authors = author_limit
+    if nr > 1:
+        mostWritten()
+        author_limit = author_limit[:nr]
+        print "Testing with: " + str(len(author_limit)) + " authors and a total of " + str(sum([len(authors[x]) for x in authors if x in author_limit])) + " documents\n\n"
+    else:
+        print "Testing with: " + str(len(authors)) + " authors and a total of " + str(sum([len(authors[x]) for x in authors])) + " documents\n\n"
     
-    mostWritten()
     print "1) Single Feature Statistics:"
     print "   [a] Average Word Length:"
     cset(f,f,f,t)
-    crosstesting(output)
+    crosstesting(output, path)
     
     print "   [b] Average Sentence Length:"
     cset(f,f,f,f,t)
-    crosstesting(output)
+    crosstesting(output, path)
       
     print "   [c] Lexical Diversity:"
     cset(f,f,f,f,f,t)
-    crosstesting(output)
+    crosstesting(output, path)
     
     
     print "   [d] Punctuation Frequency:"
     cset(f,f,f,f,f,f,f,t)
-    crosstesting(output)
+    crosstesting(output, path)
     
     enable_caching = f
     print "   [d] spelling mistakes with frequency filter:"
@@ -122,12 +336,13 @@ def batchTest():
     for i in range(1, 5):
         print "freq: >=" + str(i) + ":"
         spell_filter = i
-        crosstesting(output)    
+        crosstesting(output, path)    
     
+    enable_caching = t
     print "   [e] Function Word Frequency:"
     print "       1. Simple Frequency Statistics:"
     cset(t)
-    crosstesting(output)
+    crosstesting(output, path)
         
     
     print "       2. Bigram Frequency Statistics using different association measures and frequency filters:"
@@ -138,12 +353,12 @@ def batchTest():
             test_method_bi[0] = mes
             test_method_bi[1] = bi_meassures[mes]
             print "          " + mes + " with frequency filter = " + str(i) + ":"
-            crosstesting(output)
+            crosstesting(output, path)
         bi_filter = -1 # this tells the function to use adaptive one
         test_method_bi[0] = mes
         test_method_bi[1] = bi_meassures[mes]
         print "          " + mes + " with adaptive frequency filter based on text length:"
-        crosstesting(output)
+        crosstesting(output, path)
         
     print "       3. Trigram Frequency Statistics using different association measures and frequency filters:"
     cset(f,f,t)
@@ -153,20 +368,18 @@ def batchTest():
             test_method_tri[0] = mes
             test_method_tri[1] = tri_meassures[mes]
             print "          " + mes + " with frequency filter = " + str(i) + ":"
-            crosstesting(output)
+            crosstesting(output, path)
         tri_filter = -1 # this tells the function to use adaptive one
         test_method_tri[0] = mes
         test_method_tri[1] = tri_meassures[mes]
         print "          " + mes + " with adaptive frequency filter based on text length:"
-        crosstesting(output)
+        crosstesting(output, path)
     
     print "   [f] Part of Speech:"
     print "       1. Simple Frequency Statistics:"
     cset(f,f,f,f,f,f,f,f,t)
-    crosstesting(output)
+    crosstesting(output, path)
     
-
-    enable_caching = t
     print "       2. Bigram Frequency Statistics using different association measures and frequency filters:"
     cset(f,f,f,f,f,f,f,f,f,t)
     for mes in bi_meassures:
@@ -176,17 +389,16 @@ def batchTest():
             test_method_bi[0] = mes
             test_method_bi[1] = bi_meassures[mes]
             print "          " + mes + " with frequency filter = " + str(i) + ":"
-            crosstesting(output)
+            crosstesting(output, path)
             print "processing time: " + str(time.time() - t0) + " seconds"
         t0 = time.time()
         bi_filter = -1 # this tells the function to use adaptive one
         test_method_bi[0] = mes
         test_method_bi[1] = bi_meassures[mes]
         print "          " + mes + " with adaptive frequency filter based on text length:"
-        crosstesting(output)
+        crosstesting(output, path)
         print "processing time: " + str(time.time() - t0) + " seconds"
     
-    enable_caching = t
     print "       3. Trigram Frequency Statistics using different association measures and frequency filters:"
     cset(f,f,f,f,f,f,f,f,f,f,t)
     for mes in tri_meassures:
@@ -196,18 +408,16 @@ def batchTest():
             test_method_tri[0] = mes
             test_method_tri[1] = tri_meassures[mes]
             print "          " + mes + " with frequency filter = " + str(i) + ":"
-            crosstesting(output)
+            crosstesting(output, path)
             print "processing time: " + str(time.time() - t0) + " seconds"
         t0 = time.time()
         tri_filter = -1 # this tells the function to use adaptive one
         test_method_tri[0] = mes
         test_method_tri[1] = tri_meassures[mes]
         print "          " + mes + " with adaptive frequency filter based on text length:"
-        crosstesting(output)
+        crosstesting(output, path)
         print "processing time: " + str(time.time() - t0) + " seconds"
       
-  
-    enable_caching = t
     print "2) Combined Feature Statistics:"
     
     #using best results from previous test runs
@@ -224,7 +434,7 @@ def batchTest():
             cset()
             for key in x:
                 settings[key] = t
-            crosstesting(output)    
+            crosstesting(output, path)    
 
 def posUnigram(sentences):
     '''returns frequencies about part of speech tags'''
@@ -392,12 +602,12 @@ def cset(FunctionWordFrequency = False, BigramFrequency = False,
     settings['PartOfSpeechBigram'] = PartOfSpeechBigram
     settings['PartOfSpeechTrigram'] = PartOfSpeechTrigram
 
-def crosstesting(filen):
+def crosstesting(filen, path='../crosstesting/'):
     '''crosstesting a set of documents'''
     global bigramIndices, trigramIndices
     bigramIndices = []
     trigramIndices = []
-    processAuthorFolder('../crosstesting/', filen)
+    processAuthorFolder(path, filen)
     svm(filen)
     
 def training(filen):
@@ -981,10 +1191,10 @@ def mostWritten():
     '''retrieves the authors, that wrote the most. Used for Corpus creation.'''
     global author_limit
     authors = {}
-    files = os.listdir("../CORPUS_TXT/")
+    files = os.listdir("../corpus_raw/")
     for filed in files:
         if filed[len(filed)-3:len(filed)] == "txt" and "Freq" not in filed:
-            size = os.path.getsize("../CORPUS_TXT/" + filed)
+            size = os.path.getsize("../corpus_raw/" + filed)
             author = filed[0:len(filed)-5]
             if author in authors:
                 authors[author][0] = authors[author][0] + size

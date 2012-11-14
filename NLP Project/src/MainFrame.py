@@ -4,7 +4,7 @@ Requires PyQt4 library. Download from http://www.riverbankcomputing.com/software
 Last edit: 7 Nov 2012
 """
 
-import sys, random, os
+import sys, random, os, warnings
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from svmtools.svmutil import *
@@ -26,7 +26,9 @@ class TestDocWorker(QThread):
         self.wait()
 
     def run(self):
+        warnings.filterwarnings('ignore')
         from Main import *
+        warnings.filterwarnings('always')
         self.msg.emit("Running svm test..")
         setMode(Mode.FunctionWordFrequency)
 
@@ -36,10 +38,10 @@ class TestDocWorker(QThread):
         
         self.msg.emit("Normalising values..")
         # Normalize data
-        value = normalise("apply", [value], self.meanVect, self.stdVect)
+        value = normalise("apply", [value], self.meanVect, self.stdVect) #@UndefinedVariable
 
         self.msg.emit("Predicting..")
-        pred = svmtest(value, self.model)
+        pred = svmtest(value, self.model) #@UndefinedVariable
 
         self.msg.emit("Prediction complete.")
         self.done.emit(pred)
@@ -57,7 +59,9 @@ class TrainModelWorker(QThread):
         self.wait()
 
     def run(self):
+        warnings.filterwarnings('ignore')
         from Main import *
+        warnings.filterwarnings('always')
         setMode(Mode.FunctionWordFrequency)
 
         self.msg.emit("Extracting vectors...")        
@@ -73,7 +77,7 @@ class TrainModelWorker(QThread):
                 
         self.msg.emit("Normalising values..")
         # Normalize data
-        values, meanVect, stdVect = normalise(values)
+        values, meanVect, stdVect = normalise(values) #@UndefinedVariable
         
         try:
             self.msg.emit("Collating data..")
@@ -91,7 +95,7 @@ class TrainModelWorker(QThread):
             return
 
         self.msg.emit("Training model..")        
-        model, acc = xTrain(labels, values, 5, True)
+        model, acc = xTrain(labels, values, 5, True) #@UndefinedVariable
 
         self.msg.emit("Training completed.")
         self.done.emit(model, acc, trAuthorList, data, meanVect, stdVect)
@@ -109,8 +113,10 @@ class ProcessTestDoc(QThread):
     def __del__(self):
         self.wait()
 
-    def run(self):        
+    def run(self):
+        warnings.filterwarnings('ignore')
         from Main import *
+        warnings.filterwarnings('always')
         # Add gather feature vector for unknown author
         self.msg.emit("Extracting feature vector for unknown author..")
         value = getAttributeVector(self.docLoc)
@@ -120,13 +126,13 @@ class ProcessTestDoc(QThread):
         
         self.msg.emit("Normalising values..")
         # Normalize data
-        value = normalise("apply", [value], self.meanVect, self.stdVect)
+        value = normalise("apply", [value], self.meanVect, self.stdVect) #@UndefinedVariable
 
         essay1 = dict()
         essay1["essay 1"] = value[0]
         self.msg.emit("Dictionary entry created.")
         self.done.emit(essay1)
-        import pca as pcaplot
+        import pca as pcaplot #@UnresolvedImport
 
 class RoundButton(QPushButton):
     normColor = "#4f81bd"
@@ -137,7 +143,7 @@ class RoundButton(QPushButton):
         super(RoundButton, self).__init__(parent)
         self.initUI()
 
-    def __init__(self, text, parent=None):
+    def __init__(self, text, parent=None): #@DuplicatedSignature
         super(RoundButton, self).__init__(text, parent)
         self.initUI()
 
@@ -561,7 +567,7 @@ class MainFrame(QMainWindow):
         self.show()
 
     def plotPCA(self):        
-        import pca as pcaplot
+        import pca as pcaplot #@UnresolvedImport
 
         print "Initialising PCA.."
         pca = pcaplot.PCAPlot(self.data)
@@ -714,9 +720,11 @@ def main():
     app.processEvents()
 
     # Long imports here
+    warnings.filterwarnings('ignore')
     from Main import *
+    warnings.filterwarnings('always')
     print "Loading PCA...",
-    import pca as pcaplot
+    import pca as pcaplot #@UnresolvedImport
     print " done"
 
     frame = MainFrame()
